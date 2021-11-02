@@ -1,3 +1,4 @@
+#[deny(clippy::absurd_extreme_comparisons)]
 fn main() {
-    println!("Hello, world!");
+    println!("Henlo World!");
 }
