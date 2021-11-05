@@ -267,4 +267,41 @@ fn main() {
     let word = first_word(my_string_literal);
 }
 
-- In the eyes of the compilers, both a `String Slice` and an borrowed `String` are `&str`
+- In the eyes of the compiler, both a `String Slice` and an borrowed `String` are `&str`
+
+# Chapter 5
+
+### Structs
+
+In order for a struct to store a reference type, such as `&str` (the string slice type), we must use a lifetime specifier to ensure that the data referenced by a struct is valid for as long as the struct is. Without lifetime specifiers, structs can only store owned types like `String`.
+
+methods: on an instance of a struct.
+"assocatiated functions": on a struct (type), similar to "class methods" or "static methods".
+
+#### Printing Structs
+
+We cannot use `{}` without manually implmenting the Disply trait for a given struct. We can use `{:?}` if we include the `#[derive(debug)]` annotation immediately above the struct definition.
+
+`#[derive(debug)]` not only gives us use of `{:?}` but also `{:#?}`, which will print the same thing but with new lines between the fields of the struct.
+
+#### Automatic Referencing and Dereferencing
+
+When calling methods, Rust can automatically dereference a pointer create a reference from a piece of data to match the signature of the method you are trying to call.
+
+For instance if you try to call `p1.distance(&p2)`, and the signtature of `distance` is `distance(&self, p2: &Point)`, the complier will behind the scenes create a reference out of p1 so that you can call `#distance` without explicitly creating the ptr yourself:
+
+```
+p1.distance(&p2) --> (&p1).distance(&p2)
+```
+
+In addition to adding a `&` to automatically create a reference, rust can automatically create a mutable reference by adding `&mut` if the given method signature calls for it (`foo(&mut self)`)
+
+Conversely, when you provide a pointer to an instance and try to call a method on the instance, Rust can automatically dereference a ptr by adding a `*` behind the scenes.
+
+#### Timing of creating references and mutable references
+
+- You can create a mutable ref after you already have an immutable ref, as long as you don't use that same immutable ref again later.
+- you can create an immutable ref after you created a mutable ref, as long as you don't try to use that same mutable ref again later.
+
+# Chapter 6
+
