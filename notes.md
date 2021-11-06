@@ -303,5 +303,8 @@ Conversely, when you provide a pointer to an instance and try to call a method o
 - You can create a mutable ref after you already have an immutable ref, as long as you don't use that same immutable ref again later.
 - you can create an immutable ref after you created a mutable ref, as long as you don't try to use that same mutable ref again later.
 
-# Chapter 6
+# Chapter 6 (Enums and Pattern Matching)
 
+Chapter 6 was pretty straight forward. As a challenge:
+
+Write a method that takes in a mutable reference, then based on a match statement, conditionally passes the mutable reference to another method that mutates it. 
