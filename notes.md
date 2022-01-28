@@ -307,4 +307,30 @@ Conversely, when you provide a pointer to an instance and try to call a method o
 
 Chapter 6 was pretty straight forward. As a challenge:
 
-Write a method that takes in a mutable reference, then based on a match statement, conditionally passes the mutable reference to another method that mutates it. 
+Write a method that takes in a mutable reference, then based on a match statement, conditionally passes the mutable reference to another method that mutates it. (Completed in #double_if_exists)
+
+# Chapter 7 (Module stuff I mostly knew)
+
+# Chapter 8 (Array and collection stuff I knew)
+
+# Chapter 9 (Panics and Error Handling)
+
+#### match vs ?
+
+Difference between using match to handle Result type and using `?` operator to handle result type:
+
+When you use `?` the `from` function from the `From` trait is used to convert the error to the type specified in the function signature.
+
+`unwrap` and `expect` are signs that your program can be more robust (handle failure instead of panicking)
+
+#### Wrapping types for consiseness:
+
+It's sometimes useful to wrap a simple value, like a u32 from the guessing game, in a type:
+
+```
+pub struct Guess {
+    value: u32,
+ }
+```
+
+And then define validations on the type in the `#new` associated function in the impl block for that type, instead of repeating the runtime validations (value is between 0 and 100) everywhere the value is used.
