@@ -334,3 +334,278 @@ pub struct Guess {
 ```
 
 And then define validations on the type in the `#new` associated function in the impl block for that type, instead of repeating the runtime validations (value is between 0 and 100) everywhere the value is used.
+
+#### Definition of Result:
+
+```
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+```
+****
+Notice that T and E are unbounded.
+
+# Chapter 10 (Generics, Traits, and Lifetimes)
+
+Using many generic type parameters indicates that your code needs restructuring into smaller pieces (types).
+
+**Challenge**: Implement a trait, then implement a generic type that satisifes the traits for different impl blocks depending on what the enclosed type is (Solved with Bark & Container in *chapter_10/src/main.rs*)
+
+```
+struct Container<T> {
+    value: T,
+}
+
+impl Bark for Container<i32> {
+  fn bark() {
+    println!("bark");
+  }
+}
+
+impl Bark for Container<String> {
+  fn bark() {
+    println!("bark");
+  }
+}
+```
+ 
+If instead of something like `Container<String>` we had `Container<impl Display>`, or some other trait bound specificed for the enclosed type, we could use conditional implementation to define a method just when the enclosed type satisfies the bound.
+
+### Performance
+At compile time, Rust fills in concrete types for the generic type parameters.
+
+
+### Orphan rule
+In order to implement a trait on a type, you must have either the type or the trait local to your crate. This ensures that 2 different crates don't define conflicting trate implementations on a dependency crate's type.
+
+### Default implmentations
+It's not possible to call the default implementation from an overriding implementation of that same method.
+
+### Trait Bounds
+These are the same:
+
+```
+pub fn notify<T: Summary>(item: T)
+```
+
+```
+pub fn notify(item: impl Summary)
+```
+
+#### Copy And Clone
+
+When implementing a function with a generic parameter you will often get a compiler error that indicates you cannot move a non-copy type. You either have to borrow or add a trait bound for `Copy` to the argument.
+
+_From Stack Overflow https://stackoverflow.com/questions/31012923/what-is-the-difference-between-copy-and-clone_
+
+```
+Clone is designed for arbitrary duplications: a Clone implementation for a type T can do arbitrarily complicated operations required to create a new T. It is a normal trait (other than being in the prelude), and so requires being used like a normal trait, with method calls, etc.
+
+The Copy trait represents values that can be safely duplicated via memcpy: things like reassignments and passing an argument by-value to a function are always memcpys, and so for Copy types, the compiler understands that it doesn't need to consider those a move.
+
+// u8 implements Copy
+let x: u8 = 123;
+let y = x;
+// x can still be used
+println!("x={}, y={}", x, y);
+
+// Vec<u8> implements Clone, but not Copy
+let v: Vec<u8> = vec![1, 2, 3];
+let w = v.clone();
+//let w = v // This would *move* the value, rendering v unusable.
+```
+
+##### memcpy
+
+
+### Conditional Implmentations
+Implement a method for a type only when the enclosed generic type satisfies some trait bound:
+
+```
+impl<T: Display + PartialOrd> Pair<T> {
+    fn cmp_display(&self) {
+        if self.x >= self.y {
+            println!(The largest member is x: {}", self.x);
+        } else {
+
+            println!(The largest member is y: {}", self.y);
+        }
+    }
+}
+```
+
+#### Blanket Implementations
+
+Conditionally implement a trait for any type that implements some other trait
+
+```
+impl<T:Display> ToString for T {
+}
+```
+We would read this as, "Implement the ToString trait for any type that implements the Display trait".
+
+#### Combining the two
+
+Conditionally implment a trait for a generic type whenever the generic type's enclosed type implements some trait:
+
+```
+impl<T: Display> Bark for Container<T>
+```
+
+We would read this as: "Implement Bark for any container where the contained type implements Display"
+
+### Lifetimes
+Every reference has a lifetime, which is the scope for which that reference is valid. Usually inferred, we have to annotate lifetimes when the lifetimes of references could be related in a few specific ways.
+
+We annotate the lifetime relationships between references using `generic lifetime parameters`. This ensures that the acctual references are valid at runtime.
+
+#### Dangling references
+*A piece of data must have a longer lifetime than any reference to it*
+
+```
+    let y;
+    {
+        let x = 5;
+        y = &x;
+    }
+    println!("y: {}", y);
+```
+
+This won't compile because x is dropped when the inner scope is over. The borrow checker knows x has a shorter lifetime than y (y the reference outlives x the value), so it throws an error.
+
+```
+{
+    let x = 5;
+
+    let r = &x;
+
+    println!("r: {}", r);
+}
+```
+
+Here x has a longer lifetime than y (y the reference does not outlive x the value) so no error.
+
+#### Generic Lifetimes in Functions
+
+```
+fn longest(x: &str, y: &str) -> &str {
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+
+fn main() {
+    let string1 = String::from("abcd");
+    let string2 = "xyz";
+
+    let result = longest(string1.as_str(), string2);
+    println!("The longest string is {}", result);
+}
+```
+
+Here, the borrow checker cannot determine whether the return value of #longest will be x or y. Therefore, it does not know the lifetime of the return value. It needs to know the lifetime of the return value, because it needs to check that the borrow (result) is not used after string1 or string2 go out of scope.
+
+We satisfy this by constraining all the parameters and the return value with generic lifetime paramters:
+
+```
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+```
+
+Here, the lifetime `'a` can be anything, as long as x, y, and the return value all have a lifetime at least as long as `'a`.
+
+Specifically, we are guaranteeing that the reference that gets returned will live at least as long as the value referred to by x, and at least as long as the value referred to by y, since the return value could reference either.
+
+```
+fn main() {
+    let string1 = String::from("abcd");
+    let result;
+
+    {
+        let string2 = "xyz";
+        let result = longest(string1.as_str(), string2);
+    }
+
+    println!("The longest string is {}", result);
+}
+```
+
+In the above example, this code will not compile. The signature of #longest guarantees that `result` will live at least as long as the shorter of `string1` and `string2`. It does not guarantee that it will live any longer than that. So the return value `result` is only valid in scopes where both string1 and string2 are valid. Since `result` is used after `string2` is out of scope, the borrow checker cannot validate the borrow of string2.
+
+More generally, by giving all 3 values the lifetime of `'a`, we have guaranteed that none of the 3 references can be used after any of the others have gone out of scope. We have tied them together.
+
+### Lifetime Annotations in Struct Definitions
+
+when a struct holds a reference, its definition needs a lifetime annotation. This guarantees the reference in the struct will live at least as long as the struct.
+
+***Challenge*** Create an example where a struct outlives a reference that is enclose, and thus fails to compile.
+
+### Lifetime Elision
+
+_Lifetime Elision Rules_ are deterministic rules programmed into the compiler that allow it to infer lifetimes in certain situations where a patter appears to require annotations.
+
+#### Input Lifetimes
+Lifetimes on function or method parameters
+
+#### Output Lifetimes
+Lifetimes on return values
+
+#### The Compiler's 3 lifetime inference rules
+These three rules are applied to assign lifetimes to references. If the three rules are applied and the compiler still can't determine a lifetime, you must do so manually. If it can determine all the lifetimes, then they are _elided_
+
+1. Each paramter that is a reference gets it's own lifetime.
+
+```
+fn foo<'a, 'b>(x: &'a i32, y: &'b i32);
+```
+
+2. If there is exactly one input lifetime parameter, that lifetime is assigned to all output parameters.
+   
+```
+fn foo<'a>(x: &'a i32) -> &'a i32
+```
+
+3. When there are multiple input lifetime parameters, but one of them is `&self` or `&mut self`, the lifetime of `self` is assigned to all output lifetime paramters. 
+
+This one makes sense intuitively. Why would you want to use a reference returned by a method after the instance has gone out of scope?
+
+#### Lifetime Annotations in Method Definitions
+
+We need to declare lifetime names after the impl keyword and then us them after the struct's name, since they are part of its type.
+
+`impl<'a> ImportantExcerpt<'a>`
+
+### The Static Lifetime
+
+Means the reference is valid for the entire lifetime of the program.
+
+All string literals have the static lifetime:
+
+```
+let s: &'static str = "I have a static lifetime.";
+```
+
+Error messages that suggest using the static lifetime often result from attempting to create a dangling reference or from a mismatch of the available lifetimes.
+
+### Syntax for Generic type parameters, Trait Bounds and Lifetimes all together
+
+```
+fn longest_with_an_announcement<'a, T>(x: &'a str, y: &'a str, ann: T) -> &'a str
+    where T: Display
+{
+    println!("Announcement! {}", ann);
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+```
