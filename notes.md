@@ -373,14 +373,17 @@ impl Bark for Container<String> {
 If instead of something like `Container<String>` we had `Container<impl Display>`, or some other trait bound specificed for the enclosed type, we could use conditional implementation to define a method just when the enclosed type satisfies the bound.
 
 ### Performance
-At compile time, Rust fills in concrete types for the generic type parameters.
-
+At compile time, Rust fills in concrete types for the generic type parameters. This is called monomorphization and offers a performance benefit over the alternative method of filling in types at runtime.
 
 ### Orphan rule
-In order to implement a trait on a type, you must have either the type or the trait local to your crate. This ensures that 2 different crates don't define conflicting trate implementations on a dependency crate's type.
+In order to implement a trait on a type, you must have either the Type or the Trait local to your crate. This ensures that 2 different crates don't define conflicting Trait implementations on a dependency crate's type.
 
 ### Default implmentations
 It's not possible to call the default implementation from an overriding implementation of that same method.
+
+***Challenge*** Figure out how you would implmement something congruent to an override that calls 'super' in an OOP language.
+
+Answer: Probably instead of trying to use the default implementation in your type-specific trait implementation, you should create a conditional implementation that implements the trait for types that implement another trait, or implements the trait for types that enclose types that implement another trait. Then you are essentially composing the behavior from the bounded trait in your implementation of the new Trait. 
 
 ### Trait Bounds
 These are the same:
@@ -391,6 +394,12 @@ pub fn notify<T: Summary>(item: T)
 
 ```
 pub fn notify(item: impl Summary)
+```
+
+```
+pub fn notify<T>(item: T)
+where
+    T: Summary
 ```
 
 #### Copy And Clone
@@ -415,9 +424,6 @@ let v: Vec<u8> = vec![1, 2, 3];
 let w = v.clone();
 //let w = v // This would *move* the value, rendering v unusable.
 ```
-
-##### memcpy
-
 
 ### Conditional Implmentations
 Implement a method for a type only when the enclosed generic type satisfies some trait bound:
@@ -458,7 +464,7 @@ We would read this as: "Implement Bark for any container where the contained typ
 ### Lifetimes
 Every reference has a lifetime, which is the scope for which that reference is valid. Usually inferred, we have to annotate lifetimes when the lifetimes of references could be related in a few specific ways.
 
-We annotate the lifetime relationships between references using `generic lifetime parameters`. This ensures that the acctual references are valid at runtime.
+We annotate the lifetime relationships between references using `generic lifetime parameters`. This ensures that the actual references are valid at runtime.
 
 #### Dangling references
 *A piece of data must have a longer lifetime than any reference to it*
@@ -478,9 +484,9 @@ This won't compile because x is dropped when the inner scope is over. The borrow
 {
     let x = 5;
 
-    let r = &x;
+    let y = &x;
 
-    println!("r: {}", r);
+    println!("y: {}", y);
 }
 ```
 
@@ -522,7 +528,7 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 
 Here, the lifetime `'a` can be anything, as long as x, y, and the return value all have a lifetime at least as long as `'a`.
 
-Specifically, we are guaranteeing that the reference that gets returned will live at least as long as the value referred to by x, and at least as long as the value referred to by y, since the return value could reference either.
+Specifically, we are guaranteeing that the reference that gets returned will live at least as long as the value referred to by x, _and_ at least as long as the value referred to by y, since the return value could reference either.
 
 ```
 fn main() {
@@ -538,19 +544,22 @@ fn main() {
 }
 ```
 
-In the above example, this code will not compile. The signature of #longest guarantees that `result` will live at least as long as the shorter of `string1` and `string2`. It does not guarantee that it will live any longer than that. So the return value `result` is only valid in scopes where both string1 and string2 are valid. Since `result` is used after `string2` is out of scope, the borrow checker cannot validate the borrow of string2.
+In the above example, this code will not compile. The signature of #longest guarantees that
+none none of the 3 references can be used after any of the others have gone out of scope. We have tied them together.
 
-More generally, by giving all 3 values the lifetime of `'a`, we have guaranteed that none of the 3 references can be used after any of the others have gone out of scope. We have tied them together.
+More specifically, we have specified that `result` will live at least as long as the shorter of `string1` and `string2`. It does not guarantee that it will live any longer than that. So the return value `result` is only valid in scopes where both string1 and string2 are valid. Since `result` is used after `string2` is out of scope, the borrow checker cannot validate the borrow of string2.
 
 ### Lifetime Annotations in Struct Definitions
 
 when a struct holds a reference, its definition needs a lifetime annotation. This guarantees the reference in the struct will live at least as long as the struct.
 
-***Challenge*** Create an example where a struct outlives a reference that is enclose, and thus fails to compile.
+***Challenge*** Create an example where a struct outlives a reference that is enclosed, and thus fails to compile.
+
+Answer: This is done in #use_structs_containing_refereces in `chapter_10/src/main.rs`
 
 ### Lifetime Elision
 
-_Lifetime Elision Rules_ are deterministic rules programmed into the compiler that allow it to infer lifetimes in certain situations where a patter appears to require annotations.
+_Lifetime Elision Rules_ are deterministic rules programmed into the compiler that allow it to infer lifetimes of references and thus not require annotations.
 
 #### Input Lifetimes
 Lifetimes on function or method parameters
@@ -559,9 +568,9 @@ Lifetimes on function or method parameters
 Lifetimes on return values
 
 #### The Compiler's 3 lifetime inference rules
-These three rules are applied to assign lifetimes to references. If the three rules are applied and the compiler still can't determine a lifetime, you must do so manually. If it can determine all the lifetimes, then they are _elided_
+These three rules are applied to assign lifetimes to references. If the three rules are applied and the compiler still can't determine a lifetime, you must do so manually with annotations. If it can determine all the lifetimes, then they are _elided_
 
-1. Each paramter that is a reference gets it's own lifetime.
+1. Each parameter that is a reference gets it's own lifetime.
 
 ```
 fn foo<'a, 'b>(x: &'a i32, y: &'b i32);
@@ -573,13 +582,15 @@ fn foo<'a, 'b>(x: &'a i32, y: &'b i32);
 fn foo<'a>(x: &'a i32) -> &'a i32
 ```
 
+This one is necessary because we can't return a reference to something that we created in the method, that would be a dangling reference. So we need to reference something that was passed in. In that case the returned reference has to live at least as long as the one passed in reference.
+
 3. When there are multiple input lifetime parameters, but one of them is `&self` or `&mut self`, the lifetime of `self` is assigned to all output lifetime paramters. 
 
 This one makes sense intuitively. Why would you want to use a reference returned by a method after the instance has gone out of scope?
 
 #### Lifetime Annotations in Method Definitions
 
-We need to declare lifetime names after the impl keyword and then us them after the struct's name, since they are part of its type.
+We need to declare lifetime names after the impl keyword and then use them after the struct's name, since they are part of its type.
 
 `impl<'a> ImportantExcerpt<'a>`
 
@@ -610,7 +621,19 @@ fn longest_with_an_announcement<'a, T>(x: &'a str, y: &'a str, ann: T) -> &'a st
 }
 ```
 
-## Chapter 11
+Of course, instead of the `where` clause, we could also write it as:
+
+```
+fn longest_with_an_announcement<'a>(x: &'a str, y: &'a str, ann: impl Display) -> &'a str
+```
+
+or
+
+```
+fn longest_with_an_announcement<'a, T: Display>(x: &'a str, y: &'a str, ann: T) -> &'a str
+```
+
+## Chapter 11 (Writing Automated Tests)
 
 *Attributes*: metedata about pieces of Rust code, such as `#[derive(_)]` or `#[test]`.
 
