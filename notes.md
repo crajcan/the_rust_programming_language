@@ -1,11 +1,11 @@
-# Chapter 1
+## Chapter 1
 
 ```
 run clippy: cargo clippy --fix --allow-staged || --allow-dirty
 run rustfmt: rustfmt src/main.rs || src.lib.rs
 ```
 
-# Chapter 2
+## Chapter 2
 
 `let mut guess = String::new();`
 
@@ -38,7 +38,7 @@ The `&` just indicates that the argument is a reference. Just like variables, re
 
 `use rand::Rng;` - brings the Rng trait into scope, which defines random number generation methods on instances of `rand`.
 
-# Chapter 3
+## Chapter 3
 
 Integers can be written with a type suffix instead of a type annotation:
 
@@ -87,7 +87,7 @@ indexing into an array:
 println!("first val: {}", a[0]);
 ```
 
-# Chapter 4
+## Chapter 4
 
 - for each _value_ in rust, there is one _variable_ that is its _owner_.
 - When the _owner_ goes out of scope, the _value_ is dropped.
@@ -269,7 +269,7 @@ fn main() {
 
 - In the eyes of the compiler, both a `String Slice` and an borrowed `String` are `&str`
 
-# Chapter 5
+## Chapter 5
 
 ### Structs
 
@@ -303,17 +303,17 @@ Conversely, when you provide a pointer to an instance and try to call a method o
 - You can create a mutable ref after you already have an immutable ref, as long as you don't use that same immutable ref again later.
 - you can create an immutable ref after you created a mutable ref, as long as you don't try to use that same mutable ref again later.
 
-# Chapter 6 (Enums and Pattern Matching)
+## Chapter 6 (Enums and Pattern Matching)
 
 Chapter 6 was pretty straight forward. As a challenge:
 
 Write a method that takes in a mutable reference, then based on a match statement, conditionally passes the mutable reference to another method that mutates it. (Completed in #double_if_exists)
 
-# Chapter 7 (Module stuff I mostly knew)
+## Chapter 7 (Module stuff I mostly knew)
 
-# Chapter 8 (Array and collection stuff I knew)
+## Chapter 8 (Array and collection stuff I knew)
 
-# Chapter 9 (Panics and Error Handling)
+## Chapter 9 (Panics and Error Handling)
 
 #### match vs ?
 
@@ -346,7 +346,7 @@ enum Result<T, E> {
 ****
 Notice that T and E are unbounded.
 
-# Chapter 10 (Generics, Traits, and Lifetimes)
+## Chapter 10 (Generics, Traits, and Lifetimes)
 
 Using many generic type parameters indicates that your code needs restructuring into smaller pieces (types).
 
@@ -609,3 +609,112 @@ fn longest_with_an_announcement<'a, T>(x: &'a str, y: &'a str, ann: T) -> &'a st
     }
 }
 ```
+
+## Chapter 11
+
+*Attributes*: metedata about pieces of Rust code, such as `#[derive(_)]` or `#[test]`.
+
+### Doc Tests
+Doc Tests appear before a function as examples of its usage. You can compile and run these doc tests with `cargo test --doc`.
+
+### Custom Failure Messages
+
+`assert!`, `assert_eq!`, and `assert_ne!` can print custom failure messages that are input after the values that are being tested.
+
+```
+assert!(
+    result.contains("Carol"),
+    "The result did not contain name, value was  '{}'",
+    result
+);
+
+assert eq!(
+    4,
+    result,
+    "Expected value was {}, received {}",
+    4,
+    result
+);
+```
+
+### Should panic
+We can assert that a function call should panic.
+
+```
+#[test]
+#[should_panic]
+fn greater_than_100() {
+    Guess::new(101);
+}
+```
+
+We can also assert that the panic message contains a certain string.
+
+```
+#[test]
+#[should_panic(expected = "guess value must be less than or equal to 100")] 
+fn greater_than_100() {
+    Guess::new(101);
+}
+```
+
+### Testing options
+
+Cargo test spits out a binary which is then run. To pass options to cargo test, specify them before the `--` separator. To pass options to the resulting binary, specify them after the `--` separator.
+
+Similarily, view available `cargo test` commands with `cargo test --help`. View available flags to pass the binary with `cargo test -- --help`.
+
+#### Specifying parallelism
+
+`cargo test -- --test-threads=1`
+
+#### Display print output from passing tests
+
+`cargo test -- --nocapture`
+
+#### Ignoring specific tests unless requested
+
+```
+#[test]
+#[ignore]
+fn expensive_test() {
+    //slow running code
+}
+```
+
+To run the ignored tests run `cargo test -- --ignored`
+
+### Integration tests
+To create integration tests, create a `tests/` directory at the top level of your crate. Each file under the `tests/` directory will be treated as its own crate. As such, you will need to import your crate in order to test it.
+
+```
+extern crate adder;
+
+#[test]
+fn it_adds_two() {
+    assert_eq(4, adder::add_two(2))
+}
+```
+
+#### Running a specific integration test file
+
+`cargo test --test integration_test`
+
+#### Helper code for integration tests
+
+Since each file under the `tests/` directory is treated as its own crate, and is run by the test harness, we need to put helper functions inside a helper inside a module within a new directory. Code inside a module inside a subdirectory such as `tests/common/mod.rs` will not be added to the test runner and can be included by any integration tests in `tests/`.
+
+```
+extern crate adder;
+
+mod common;
+
+#[test]
+fn it_adds_two() {
+    common::setup();
+    assert_eq(4, adder::add_two(2))
+}
+```
+
+You cannot use integration tests to test binary crates that only have a `src/main.rs` and no `src/lib.rs`, because they do not expose anything to other crates. To use integration tests, keep your `src/main.rs` as simple as possible and have it shell out to `src/lib.rs`
+
