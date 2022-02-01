@@ -1,3 +1,8 @@
+# Notes From The Text
+
+These are notes that I took every time I encountered a fact I didn't already know, or was introduced to
+a concept that I didn't immediately understand
+
 ## Chapter 1
 
 ```
@@ -740,4 +745,143 @@ fn it_adds_two() {
 ```
 
 You cannot use integration tests to test binary crates that only have a `src/main.rs` and no `src/lib.rs`, because they do not expose anything to other crates. To use integration tests, keep your `src/main.rs` as simple as possible and have it shell out to `src/lib.rs`
+
+## Chapter 12 (An I/O project: Building a Command Line Program)
+
+### Reading Argument Values
+
+`std::env::args` returns an iterator of the command line arguments.
+
+When we use `std::env::args()` to gather the argument list, the first argument will always be the name of the binary. This is to follow a C standard that allow the program to know the name by which it was invoked.
+
+#### Side note on importing modules
+
+When importing, it is convention to bring the parent module into scope, so we `use std::env`. This allows us to use other methods from `std::env`, and avoids namespace issues and abiguity with other methods in the current module.
+
+#### Annotating types to create vectors
+
+The compiler can't tell what we want to create with `#collect` when we are trying to use `#collect` to turn an iterator into a Vector. So we annotate it as follows:
+
+`let args: Vec<String> = env::args().collect();`
+
+alternatively we can use the _Turbofish_:
+
+`let args = env::args().collect::<Vec<String>>();`
+
+
+### Separation of Concerns for Binary Projects
+
+The organizational problem of allocating responsibility for multiple tasks to the main function is common to many binary projects. As a result, the Rust community has developed a process to use as a guideline for splitting the separate concerns of a binary program when main starts getting large. The process has the following steps:
+
+- Split your program into a main.rs and a lib.rs and move your program’s logic to lib.rs.
+- As long as your command line parsing logic is small, it can remain in main.rs.
+- When the command line parsing logic starts getting complicated, extract it from main.rs and move it to lib.rs.
+
+The responsibilities that remain in the main function after this process should be limited to the following:
+
+- Calling the command line parsing logic with the argument values
+- Setting up any other configuration
+- Calling a run function in lib.rs
+- Handling the error if run returns an error
+
+### Idiomatic Rust
+
+This chapter does a great job of illustrating the thought process of an idiomatic Rust programmer. Several times in a row it details the code smell and the incremental steps for improvement. The process of recognizing these smells, then making small improvement creates a chain of simple changes that greatly improves the maintainability and readibility of the program.
+
+#### Extracting the Command Line Arg Parsing Logic
+
+I try to summarize the dominos that fall as we try to extract the command line arg parsing logic below:
+
+1. We want to extract the command line parsing logic in preparation for moving it to lib.rs. We implelment #parse_config method that returns a _tuple_ of config data. - pg. 234.
+2. We notice our #parse_config returns a _tuple_ of related data. Since the data is related, we can group it with more meaning in a `Config` struct. - pg. 235
+3. Now we have the data in a `Config` struct, we notice that we have a method #parse_config() which has the sole purpose of creating a `Config` Struct. We can create an associated function on `Config` called `#new` to handle this in a more idiomatic way. pg. 236
+4. We then notice that when our user enters too few variables, we get an `index out of bounds` panic when trying to parse the command line args. We can give our users a better message to explain what they did wrong. In #Config::new we add our our condition to make sure there are enough command line args, and we `panic` with our own messaage if there are not. pg. 237
+5. We notice that our `panic!` explains what the user did wrong but also offers them a backtrace and other extraneous information. we remember that a panic is more appropriate for a programming problem than a user error. We decide to return a result indicating success or error from `Config::new()`. pg. 238
+6. The compiler tells us we need to update the callers of `Config::new()` to handle the new return type. We use `unwrap_or_else` to print the error message returned by `Config::new()` and call `process::exit(1);` to indicate the program terminated with an error state. pg. 239
+
+##### Summary
+
+- Tuples should often be converted to structs so that the the named fields can convey more meaning.
+- If a method is just creating a struct, or taking some other action usually handled by an associated function. We should just create `#new` or something similar on the struct.
+- Panics meant for the programmer (Usually from some other module or std lib method) are not helpful for the user.
+- Panics in general are not great for the user, prefer to use `Result` to convey `Err` conditions.
+
+#### Extracting Logic From Main.
+
+1. We want to extract a function named run that will hold all the logic currently in the main function. pg 240
+2. We see that there is still a call to `expect` in `#run`, we would like the program not to panic, so we decide to have `#run` return a `Result<(), Box<dyn Error>>` in preparation for letting `#main` handle the error case in a user friendly way. pg. 241
+3. The compiler tells us with "unused `Result` that must be used" warning that we still have to handle our error case in main. So we add a `println!` that says there was an "Application error", prints the error and then exits the process with a code of `1` to indicate the program ended in an error state. pg. 242
+
+##### Summary
+
+- Calls to `#expect` and `#unwrap` are indicators that your code could have more verbose error handling.
+- If you see an unused "`Result` that must be used" warning then you are not handling an error case.
+
+#### Splitting Code into a Library Crate
+
+1. We want to move all the code that isn't the main function from `src/main.rs` to `src/lib.rs` pg. 242
+2. We make `src/lib.rs` and copy/paster everything over. We change `run()`, `Config`, `Config::new` and all of `Config`'s fields to public to give our crate a public API. pg. 243
+3. The compiler tells us we need to bring our API into scope to be used in `src/main.rs`, so we add `extern crate minigrep` to include the crate and appropriately instantiate `Config` and `#run`. pg. 243
+
+#### Using Test-Driven Development
+1. We want to have a `#search` function return all the lines from the file that contain the query. So we write a test that asserts that `#search` returns the line from a string that contains a given query. pg. 245
+2. The compiler tells us `#search` is not found. We add a naive `#search` function that just returns an empty vector, just to get the test to compile. pg. 245
+3. The compiler tells us "missing lifetime specifier", because `#search` returns a `Vec` of borrowed `str`s, but the compiler cannot tell if the borrow comes from `query` or `content`. We add a `'a` lifetime annotation to `content` and the return type because the return vector will always be made up of values borrowed from `content`. 
+4. We see that the test compiles but fails--it only returns an empty `Vec<>`. 
+5. We add code to handle the 1-match use case. The test passes.
+6. We add a test to test the multiple-match use case. The new test fails. We add code to handle the multiple-match use case. The test passes.
+7. We notice we are running a for loop on an iterator just to return a new collection of selected items from the iterator. We refactor into a call to `#filter`.
+
+#### Summary
+
+- We we write a function and get a "missing lifetime specifier error", we probabably just have to tell the compiler which arguments the return value will be borrowing from.
+- `#filter` is more expressive way to trim down a vector of references (or owned values for that matter) than using a for loop.
+
+*Challenge* Write an integration test that calls run with a filename, and then watches stdout to make sure the correct values are printed.
+
+#### Adding a case-insenstive search function
+
+1. We want to allow users to have a case-insenstive search option so we add a test for a method called `#case_insensitive_search`. pg 250
+2. We implement a skeleton method to get the test to compile. It fails. pg 251
+3. We copy/paste the original `#search` method. We call `.to_lowercase` on both `query` and `line` so that we can compare each line to the query in a case-insensitive manner.
+4. We get a compiler error: "expected an implementor of trait `Pattern<'_>` help: consider borrowing here: query.to_lowercase()", `.to_lowercase` creates a new String, so we need to borrow where we did before. We add the & in front of `query` and the test passes.
+5. 
+
+- str manipulation usually results in the creation of a new String.
+
+#### Adding a environment variable for case-insenstive search
+1. We add a configuration option to the `Config` struct for case-insensitive search. pg. 252
+2. We add an if/else block to call either `search` or `case_insensitive_search` based on the `Config.case_sensitive` value. pg. 253
+3. The compiler tells us we need to update the other instantiations of `Config` to include a `case_sensitive` value. We update the `Config::new` function to check the env variables using `std::env::var("CASE_INSENSITIVE")`
+4. The compiler gives us a mismatched types error because `#std::env::var` returns a `Result`, not a `bool`. We use `#is_err` to convert the `Result` to a `bool`
+
+#### Summary
+- `#is_err` is useful for converting a `Result` into a `bool`
+
+#### Printing error messages to the stderr and successful output to stdout
+We can use `eprintln!` to print errors to stderr instead of stdout.
+
+#### #unwrap_or_else
+When the `Result` is an `Ok` value, `#unwrap_or_else` will just unwrap the `Ok` value. When it is an `Err` value, it will allow us to handle the error with a closure that takes the value held by the `Err` variant as an argument.
+
+```
+let config = Config::new(&args).unwrap_or_else(|err| {
+    println!("Problem parsing arguments: {}", err);
+    process::exit(1);
+});
+```
+
+Remember that `unwrap` just panics when a `Result` is `Err` or an `Option` is `None`
+Remember that `expect` panics when `Result` is `Err` or an `Option` is `None` and lets you set your panic message.
+
+#### Trait Objects
+When we return `Result<(), Box<dyn Error>>`, The `Box<dyn Error>` is a _Trait Object_. Trait objects let us return any type that implements a given trait (`Error`) in this case. But we don't have to specify which particular type the return value will be.
+
+*Question* Why use a trait object instead of a trait bound such as `impl Error` on the return type? 
+
+Possible answer: A return type of `impl Error` would let the compiler check (with monomorphization) that any possible type that could be used there implements error. By using a _Trait Object_ we are specifying that we might not have the exhaustive set of types that could be used here at compile time.   
+
+*Challenge* Control case insensitivity through either a command line argument or an environment variable. Deide which should take precedence if both are set.
+
+-> Finished: See `Config::is_case_senstive` in `src/lib.rs`
 
