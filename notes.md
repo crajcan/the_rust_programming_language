@@ -758,6 +758,8 @@ When we use `std::env::args()` to gather the argument list, the first argument w
 
 When importing, it is convention to bring the parent module into scope, so we `use std::env`. This allows us to use other methods from `std::env`, and avoids namespace issues and abiguity with other methods in the current module.
 
+It also adds clarity when we call `env::args()` instead of just `args()`
+
 #### Annotating types to create vectors
 
 The compiler can't tell what we want to create with `#collect` when we are trying to use `#collect` to turn an iterator into a Vector. So we annotate it as follows:
@@ -767,7 +769,6 @@ The compiler can't tell what we want to create with `#collect` when we are tryin
 alternatively we can use the _Turbofish_:
 
 `let args = env::args().collect::<Vec<String>>();`
-
 
 ### Separation of Concerns for Binary Projects
 
@@ -790,21 +791,21 @@ This chapter does a great job of illustrating the thought process of an idiomati
 
 #### Extracting the Command Line Arg Parsing Logic
 
-I try to summarize the dominos that fall as we try to extract the command line arg parsing logic below:
+I try to summarize the dominoes that fall as we try to extract the command line arg parsing logic below:
 
-1. We want to extract the command line parsing logic in preparation for moving it to lib.rs. We implelment #parse_config method that returns a _tuple_ of config data. - pg. 234.
+1. We want to extract the command line parsing logic in preparation for moving it to    `src/lib.rs`. We implelment #parse_config method that returns a _tuple_ of config data. pg. 234.
 2. We notice our #parse_config returns a _tuple_ of related data. Since the data is related, we can group it with more meaning in a `Config` struct. - pg. 235
 3. Now we have the data in a `Config` struct, we notice that we have a method #parse_config() which has the sole purpose of creating a `Config` Struct. We can create an associated function on `Config` called `#new` to handle this in a more idiomatic way. pg. 236
-4. We then notice that when our user enters too few variables, we get an `index out of bounds` panic when trying to parse the command line args. We can give our users a better message to explain what they did wrong. In #Config::new we add our our condition to make sure there are enough command line args, and we `panic` with our own messaage if there are not. pg. 237
-5. We notice that our `panic!` explains what the user did wrong but also offers them a backtrace and other extraneous information. we remember that a panic is more appropriate for a programming problem than a user error. We decide to return a result indicating success or error from `Config::new()`. pg. 238
+4. We call `cargo run` and notice that when our user enters too few variables, we get an `index out of bounds` panic when trying to parse the command line args. We can give our users a better message to explain what they did wrong. In `#Config::new` we add our our condition to make sure there are enough command line args, and we `panic` with our own messaage if there are not. pg. 237
+5. We notice that our `panic!` explains what the user did wrong but also offers them a backtrace and other extraneous information. We remember that a panic is more appropriate for a programming problem than a user error. We decide to return a result indicating success or error from `Config::new()`. pg. 238
 6. The compiler tells us we need to update the callers of `Config::new()` to handle the new return type. We use `unwrap_or_else` to print the error message returned by `Config::new()` and call `process::exit(1);` to indicate the program terminated with an error state. pg. 239
 
 ##### Summary
 
 - Tuples should often be converted to structs so that the the named fields can convey more meaning.
-- If a method is just creating a struct, or taking some other action usually handled by an associated function. We should just create `#new` or something similar on the struct.
+- If a method is just creating a struct, or taking some other action usually handled by an associated function. We should just create `#new` or some similar associated function in the `Struct` impl.
 - Panics meant for the programmer (Usually from some other module or std lib method) are not helpful for the user.
-- Panics in general are not great for the user, prefer to use `Result` to convey `Err` conditions.
+- Panics in general (including the ones we define) are not great for the user, prefer to use `Result` to convey `Err` conditions.
 
 #### Extracting Logic From Main.
 
@@ -820,7 +821,7 @@ I try to summarize the dominos that fall as we try to extract the command line a
 #### Splitting Code into a Library Crate
 
 1. We want to move all the code that isn't the main function from `src/main.rs` to `src/lib.rs` pg. 242
-2. We make `src/lib.rs` and copy/paster everything over. We change `run()`, `Config`, `Config::new` and all of `Config`'s fields to public to give our crate a public API. pg. 243
+2. We make `src/lib.rs` and copy/paste everything over. We change `run()`, `Config`, `Config::new` and all of `Config`'s fields to public to give our crate a public API. pg. 243
 3. The compiler tells us we need to bring our API into scope to be used in `src/main.rs`, so we add `extern crate minigrep` to include the crate and appropriately instantiate `Config` and `#run`. pg. 243
 
 #### Using Test-Driven Development
@@ -834,25 +835,27 @@ I try to summarize the dominos that fall as we try to extract the command line a
 
 #### Summary
 
-- We we write a function and get a "missing lifetime specifier error", we probabably just have to tell the compiler which arguments the return value will be borrowing from.
+- When we write a function and get a "missing lifetime specifier error", we probabably just have to tell the compiler which arguments the return value will be borrowing from.
 - `#filter` is more expressive way to trim down a vector of references (or owned values for that matter) than using a for loop.
 
-*Challenge* Write an integration test that calls run with a filename, and then watches stdout to make sure the correct values are printed.
+***Challenge*** Write an integration test that calls run with a filename, and then watches stdout to make sure the correct values are printed.
+
+-> Finish in `chapter_12/tests/run_tests.rs
 
 #### Adding a case-insenstive search function
 
 1. We want to allow users to have a case-insenstive search option so we add a test for a method called `#case_insensitive_search`. pg 250
 2. We implement a skeleton method to get the test to compile. It fails. pg 251
 3. We copy/paste the original `#search` method. We call `.to_lowercase` on both `query` and `line` so that we can compare each line to the query in a case-insensitive manner.
-4. We get a compiler error: "expected an implementor of trait `Pattern<'_>` help: consider borrowing here: query.to_lowercase()", `.to_lowercase` creates a new String, so we need to borrow where we did before. We add the & in front of `query` and the test passes.
-5. 
+4. We get a compiler error: "expected an implementor of trait `Pattern<'_>` help: consider borrowing here: &query.to_lowercase()", `.to_lowercase` creates a new String, so we need to borrow here again since `contains` expects a borrow. We add the & in front of `query` and the test passes.
 
+#### Summary
 - str manipulation usually results in the creation of a new String.
 
 #### Adding a environment variable for case-insenstive search
 1. We add a configuration option to the `Config` struct for case-insensitive search. pg. 252
-2. We add an if/else block to call either `search` or `case_insensitive_search` based on the `Config.case_sensitive` value. pg. 253
-3. The compiler tells us we need to update the other instantiations of `Config` to include a `case_sensitive` value. We update the `Config::new` function to check the env variables using `std::env::var("CASE_INSENSITIVE")`
+2. We add an if/else block to `#run` to call either `search` or `case_insensitive_search` based on the `Config.case_sensitive` value. pg. 253
+3. The compiler tells us we need to update the other instantiations of `Config` to include a `case_sensitive` value. We update the `Config::new` function to check the env variables using `std::env::var("CASE_INSENSITIVE")` and set the `case_sensitive` field.
 4. The compiler gives us a mismatched types error because `#std::env::var` returns a `Result`, not a `bool`. We use `#is_err` to convert the `Result` to a `bool`
 
 #### Summary
@@ -862,11 +865,11 @@ I try to summarize the dominos that fall as we try to extract the command line a
 We can use `eprintln!` to print errors to stderr instead of stdout.
 
 #### #unwrap_or_else
-When the `Result` is an `Ok` value, `#unwrap_or_else` will just unwrap the `Ok` value. When it is an `Err` value, it will allow us to handle the error with a closure that takes the value held by the `Err` variant as an argument.
+When the `Result` is an `Ok` value, `#unwrap_or_else` will just unwrap the `Ok` value. When it is an `Err` value, it will allow us to handle the error with a closure that takes the value held by the `Err` variant as an argument:
 
 ```
 let config = Config::new(&args).unwrap_or_else(|err| {
-    println!("Problem parsing arguments: {}", err);
+    eprintln!("Problem parsing arguments: {}", err);
     process::exit(1);
 });
 ```
@@ -875,13 +878,12 @@ Remember that `unwrap` just panics when a `Result` is `Err` or an `Option` is `N
 Remember that `expect` panics when `Result` is `Err` or an `Option` is `None` and lets you set your panic message.
 
 #### Trait Objects
-When we return `Result<(), Box<dyn Error>>`, The `Box<dyn Error>` is a _Trait Object_. Trait objects let us return any type that implements a given trait (`Error`) in this case. But we don't have to specify which particular type the return value will be.
+When we return `Result<(), Box<dyn Error>>`, The `Box<dyn Error>` is a _Trait Object_. Trait objects let us return any type that implements a given trait. `Error` in this case. But we don't have to specify which particular type the return value will be.
 
 *Question* Why use a trait object instead of a trait bound such as `impl Error` on the return type? 
 
-Possible answer: A return type of `impl Error` would let the compiler check (with monomorphization) that any possible type that could be used there implements error. By using a _Trait Object_ we are specifying that we might not have the exhaustive set of types that could be used here at compile time.   
+Answer: We have to do this often when using the `?` operator to return an error because not every error type has an implementation of `From<_>` for `impl std::error::Error`. Basically the compiler does not know how to change our error into the more general error.
 
 *Challenge* Control case insensitivity through either a command line argument or an environment variable. Deide which should take precedence if both are set.
 
 -> Finished: See `Config::is_case_senstive` in `src/lib.rs`
-
