@@ -1,23 +1,26 @@
 use std::env;
 use std::error::Error;
 use std::fs::File;
+use std::io;
 use std::io::Read;
 
-pub struct Config {
+pub struct Config<'a, W: io::Write> {
     pub query: String,
     pub filename: String,
     pub case_sensitive: bool,
+    pub output: &'a mut W,
 }
 
-impl Config {
-    pub fn new(args: &[String]) -> Result<Self, &'static str> {
+impl<'a, W: io::Write> Config<'a, W> {
+    pub fn new(args: &[String], writer: &'a mut W) -> Result<Self, &'static str> {
         if args.len() < 3 {
             Err("not enough arguments")
         } else {
             Ok(Config {
                 query: args[1].clone(),
                 filename: args[2].clone(),
-                case_sensitive: Config::is_case_sensitive(args.get(3)),
+                case_sensitive: Config::<W>::is_case_sensitive(args.get(3)),
+                output: writer,
             })
         }
     }
@@ -34,7 +37,7 @@ impl Config {
     }
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run<W: io::Write>(config: Config<W>) -> Result<(), Box<dyn Error>> {
     let mut f = File::open(config.filename)?;
 
     let mut contents = String::new();
@@ -47,7 +50,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     };
 
     for line in results {
-        println!("{}", line);
+        writeln!(config.output, "{}", line)?;
     }
 
     Ok(())
