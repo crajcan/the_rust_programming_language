@@ -887,3 +887,246 @@ Answer: We have to do this often when using the `?` operator to return an error 
 *Challenge* Control case insensitivity through either a command line argument or an environment variable. Deide which should take precedence if both are set.
 
 -> Finished: See `Config::is_case_senstive` in `src/lib.rs`
+
+# Chapter 12 (Iterators and Closures)
+
+closure
+
+: Rust's closures are anonymous functions you can save in a variable or pass as an argument to other functions. Unlike functions, closures can capture values from the scope in which they're called.
+
+Closures cannot be exposed in the public API of our crates so they do not require explicit type annotations for their arguments and return values.
+
+#### Fn traits
+Provided by the standard library, all closures implmement at least one of the traits: `Fn`, `FnMut`, or `FnOnce`.
+
+```
+struct Cacher<T>
+    where T: Fn(u32 -> u32)
+{
+    calculation: T,
+    value: Option<u32>
+}
+```
+
+Cacher is a struct that can hold any closure that has one u32 argument and return a u32.
+
+*Challenge* Extend the Cacher impl furthur to support non-copy types
+
+#### Capturing the environment with closures
+
+*Question* What does it mean that "closures can capture values from the scope in which they are called"
+
+```
+fn main() {
+    let x = 4;
+
+    let equal_to_x = |z| z == x;
+
+    let y = 4;
+    
+    assert!(equal_to_x(y))
+}
+```
+
+It can actually take a the value of a variable that is in scope with it. It does this in three ways:
+
+1. Immutably borrowing
+2. Mutably borrowing
+3. Taking ownership. (move)
+
+Closures will preferentially capture variables by reference and only move down the above list as needed.
+
+When writing functions that take closures as arguments, we just manually annotate the `Trait` bounds:
+
+1. Fn - the closure can only capture values by immutable reference (&T) 
+2. FnMut - the closure can capture by immutable or mutable reference (&mut T)
+3. FnOnce - the closure can capture by value (T), a.k.a. take owernship via a move. 
+
+The compiler will capture each variable in the least restrictive manner possible on a variable by variable basis.
+
+`move` keyword forces closures to take ownership of the values it uses from the environment. Useful for passing a closure to a new thread and having it take some piece of data with it.
+
+```
+fn main() {
+    let x = vec![1,2,3];
+
+    let equal_to_x = move |z| z == x;
+
+    println!("can't use x here: {:?}, x);
+
+    let y = vec![1,2,3];
+
+    assert!(equal_to_x(y));
+}
+```
+
+Here because x is moved into the closure, we cannot use it after the definition.
+
+*Example*: Trying to pass a closure that is `FnMut` to a method that is restricted to `Fn`
+
+```
+fn apply_to_3<T: Fn(i32) -> i32>(f: T) ->  {
+    f(3)
+}
+
+fn main() {
+    let y = 5;
+
+    let double = |x| {
+      y = 10;
+      2 * x
+    };
+
+    apply_to_3(double);
+}
+```
+
+Here we will get an error: "expected a closure that implements the `Fn` trait, but this closure only implements `FnMut`" because the compiler infers the closure is FnMut, since it mutates y. 
+
+*Example*: Trying to pass a closure that is `FnOnce` to a method that is restricted to `Fn` or `FnMut`
+
+```
+use std::mem;
+
+fn apply_to_3<T: FnMut(i32) -> i32>(f: T) ->  {
+    f(3)
+}
+
+fn main() {
+    let y = "foo".to_string();
+
+    let double = |mut x| {
+      mem::drop(y);
+      2 * x
+    };
+
+    println!("3 doubled: {}", apply_to_3(double));
+}
+```
+
+Here we will get an error: "expected a closure that implements the `FnMut` trait, but this closure only implements `FnOnce`" because the compiler infers the closure is FnOnce, since it destroys y. Another way the closure could have moved y out of _its_ context, would be to return the value it moved from the outer context:
+
+```
+let closure = move |y| y
+```
+
+*Question* Why can `FnOnce` closures only be called once?
+
+As seen the previous example, closures that only satisfy `FnOnce` (and don't satisfy `Fn` or `FnMut`) have to take ownership of a value in their environment because they are going to do move it somewhere else, and this can only be done once.
+
+If we update `apply_to_3` and to accept closures that only satisfy `FnOnce`, we can see that trying to call our closure twice will result in a "use of moved value" error:
+
+```
+use std::mem;
+
+fn apply_to_3<T: FnMut(i32) -> i32>(f: T) ->  {
+    f(3)
+}
+
+fn main() {
+    let y = "foo".to_string();
+
+    let double = |mut x| {
+      mem::drop(y);
+      2 * x
+    };
+
+    println!("3 doubled: {}", apply_to_3(double));
+    println!("3 doubled: {}", apply_to_3(double));
+}
+```
+
+Most of the time it makes sense to start by specifying your closure arguments as `Fn` and the compiler will tell you if you need to change the bound to `FnMut` or `FnOnce`.
+
+*Also worth note:*
+
+The compiler only looks at the body of the closure to implement the `Fn`, `FnMut` or `FnOnce` traits for a closure. The `move` keyword does not force a closure to only satisfy `FnOnce`.
+
+This is because the `move` keyword only makes the closure take ownership of the variables when the closure is created!. The closure can still be `Fn` as long as it doesn't modify the variables, and it can still be `FnMut` as long as it does not move the variable _again_, giving ownership to some other context, often seen when a captured variable is in turn dropped by the closure or returned from the closure.
+
+This is best explained [here](https://stackoverflow.com/questions/50135871/how-can-a-closure-using-the-move-keyword-create-a-fnmut-closure)
+
+### Iterators
+Rust `iterators` (which `impl Iterator`) are _lazy_. They have no effect until you call methods that consume the `iterator` to use it up. That is, no iteration takes place until you call some other method on the `iterator`.
+
+#### A look under the hood
+
+```
+pub trait Iterator {
+    type Item;
+
+    fn next(&mut self) -> Option<Self::Item>;
+}
+```
+
+Here, `Item` is an _associated type_, it means, among other things, that implementing the `Iterator` type requires that you also define an `Item` type. The `Item` type is used as the return type of the `#next` method.
+
+##### next
+
+```
+#[test]
+fn iterator_demo() {
+    let v1 = vec![1,2,3];
+
+    let mut v1_iter = v1.iter();
+
+    assert_eq!(v1_iter.next(), Some(&1));
+    assert_eq!(v1_iter.next(), Some(&2));
+    assert_eq!(v1_iter.next(), Some(&3));
+    assert_eq!(v1_iter.next(), None);
+}
+```
+
+Here we need v1_iter to be mutable because calling `#next` changes iternal state (the pointer that keeps track of where we are in the iterator). Methods that call `#next` are called _consuming adapters_ because calling them uses up the iterator. 
+
+```
+let v1_iter = vec![1,2,3].iter();
+assert_eq!(v1_iter.sum(), 6);
+
+//
+// v1_iter.next();
+```
+
+`#iter`: produces an iterator over immutable references.
+`#iter_mut`: produces an iterator that lets us iterate over mutable references, requires the collection we begin with is mutable.
+`#into_iter`: Moves ownership and returns owned values.
+
+_Iterator adapters_ allow you to change iterators into different kinds of iterators. Because iterators are lazy, you have to call a _consuming adapter_ at to get the restuls from calls to _iterator adapters_.
+
+```
+let v1: Vec<i32> = vec![1,2,3];
+
+v1.iter().map(|x| x + 1);
+```
+
+This will result in a warning: "unused `std::iter::Map` which must be used: iterator adaptors are lazy and do nothing unless consumed".
+
+Commonly we will finish with the `#collect` consuming adaptor:
+
+```
+let v1 = vec![1,2,3];
+
+v1.iter().map(|x| x + 1).collect::<Vec<_>>();
+```
+
+Notice the underscore in the _turbofish_ lets us allow the complier to infer the element type we want the resulting collection to have.
+
+### Custom Iterators
+See `chapter_13/src/counter.rs`
+
+*note* The iterator constructor methods `#iter`, `#iter_mut`, and `#into_iter` convert collection types like `Vector` into `std::slice::Iter`, `std::slice::IterMut`, and `std::slice::IntoIter` structs, respectively. Each implement the `Iterator` trait. When implement `Iterator` for your own custom type. There is no need to call any constructor methods.
+
+### Zip
+`#zip` returns `None` when either of its input iterators returns `None`
+
+```
+    let v1 = vec![1, 2, 3, 4];
+    let v2 = vec![1, 2, 3];
+
+    let pairs = v1.into_iter().zip(v2).collect::<Vec<_>>();
+
+    assert_eq!(pairs, vec![(1, 1), (2, 2), (3, 3)]);
+```
+
+### Upgrading our minigrep program from Chapter 12
+
