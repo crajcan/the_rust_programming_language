@@ -910,11 +910,11 @@ struct Cacher<T>
 
 Cacher is a struct that can hold any closure that has one u32 argument and return a u32.
 
-*Challenge* Extend the Cacher impl furthur to support non-copy types
+**Challenge** Extend the Cacher impl furthur to support non-copy types
 
 #### Capturing the environment with closures
 
-*Question* What does it mean that "closures can capture values from the scope in which they are called"
+**Question** What does it mean that "closures can capture values from the scope in which they are called"
 
 ```
 fn main() {
@@ -928,7 +928,7 @@ fn main() {
 }
 ```
 
-It can actually take a the value of a variable that is in scope with it. It does this in three ways:
+Answer: It can actually take a the value of a variable that is in scope with it. It does this in three ways:
 
 1. Immutably borrowing
 2. Mutably borrowing
@@ -940,11 +940,11 @@ When writing functions that take closures as arguments, we just manually annotat
 
 1. Fn - the closure can only capture values by immutable reference (&T) 
 2. FnMut - the closure can capture by immutable or mutable reference (&mut T)
-3. FnOnce - the closure can capture by value (T), a.k.a. take owernship via a move. 
+3. FnOnce - the closure can capture by immutable or mutable reference, and consume values it has taken ownership of (drop or give ownership to some other context).
 
 The compiler will capture each variable in the least restrictive manner possible on a variable by variable basis.
 
-`move` keyword forces closures to take ownership of the values it uses from the environment. Useful for passing a closure to a new thread and having it take some piece of data with it.
+`move` keyword forces closures to take ownership of the values it uses from the environment **on creation**. Useful for passing a closure to a new thread and having it take some piece of data with it.
 
 ```
 fn main() {
@@ -1007,19 +1007,22 @@ fn main() {
 Here we will get an error: "expected a closure that implements the `FnMut` trait, but this closure only implements `FnOnce`" because the compiler infers the closure is FnOnce, since it destroys y. Another way the closure could have moved y out of _its_ context, would be to return the value it moved from the outer context:
 
 ```
-let closure = move |y| y
+let y = "foo".to_string();
+let double = |x| y;
 ```
+
+Note for this closure to be assigned only `FnOnce`, y must not implement `Copy`.
 
 *Question* Why can `FnOnce` closures only be called once?
 
-As seen the previous example, closures that only satisfy `FnOnce` (and don't satisfy `Fn` or `FnMut`) have to take ownership of a value in their environment because they are going to do move it somewhere else, and this can only be done once.
+As seen the previous example, closures that only satisfy `FnOnce` (and don't satisfy `Fn` or `FnMut`) have to take ownership of a value in their environment because they are in turn going to move it somewhere else, and this can only be done once.
 
-If we update `apply_to_3` and to accept closures that only satisfy `FnOnce`, we can see that trying to call our closure twice will result in a "use of moved value" error:
+If we update `double` to only satisfy `FnOnce`, we can see that trying to pass our closure twice will result in a "use of moved value" error:
 
 ```
 use std::mem;
 
-fn apply_to_3<T: FnMut(i32) -> i32>(f: T) ->  {
+fn apply_to_3<T: FnOnce(i32) -> i32>(f: T) ->  {
     f(3)
 }
 
@@ -1036,9 +1039,94 @@ fn main() {
 }
 ```
 
+Similarily if we try to use it twice where it was defined:
+
+```
+use std::mem;
+
+fn main() {
+    let y = "foo".to_string();
+
+    let double = |mut x| {
+      mem::drop(y);
+      2 * x
+    };
+
+    double(3);
+    double(3);
+}
+```
+
+*Question*: How do we use an `FnMut` closure twice?
+
+```
+fn apply_to_3<T: FnMut(i32) -> i32>(mut f: T) -> i32 {
+    f(3)
+}
+
+fn play_with_closures() {
+    let mut y = 5;
+
+    let mut double = |x| {
+        y = y + 10;
+        2 * x
+    };
+
+    println!("{}", apply_to_3(&mut double));
+    println!("{}", apply_to_3(&mut double));
+}
+```
+
+Answer as detailed from the above:
+1. The captured variable has to be mutable so the closure can mutate it.
+2. The closure also has to be `mut` because an `&mut` is stored inside.
+3. The closure can only be passed as a `&mut`, the borrow is because we want to use it again in this context. Since it will be modified when `#apply_to_3` uses it, the `mut` is necessary too.
+4. Any function borrowing the mutable closure needs to annotate that argument as mutable.
+
+If we want to allow the closure to be moved and then used twice, we can do something like this:
+
+```
+fn apply_to_3<T: FnMut(i32) -> i32>(mut f: T) -> i32 {
+    f(3);
+    f(3)
+}
+
+fn play_with_closures() {
+    let mut y = 5;
+
+    let double = |x| {
+        y = y + 10;
+        2 * x
+    };
+
+    println!("{}", apply_to_3(double));
+}
+```
+Note that we don't need to pass `#double` as a borrow because we are letting `#apply_to_3` take ownership. Also we don't need `#double` to be mutable, because it will be defined as mutable when it gets moved to `#apply_to_3`. Furthermore, `#play_with_closures` can't use `#double` again since it was moved.
+
+**Also worth note:**
+
+As the closure definition determines what Fn trait the closure will be assigned, the closure definition is also solely responsible for determining if the closure can be used twice. Even if we pass it to a function that allows `FnOnce`, we can still use it multiple times:
+
+```
+fn play_with_closures() {
+    let mut y = 5;
+
+    let mut double = |x| {
+        y = y + 10;
+        2 * x
+    };
+
+    println!("{}", apply_to_3(&mut double));
+    println!("{}", apply_to_3(&mut double));
+}
+```
+
+**A tip**
+
 Most of the time it makes sense to start by specifying your closure arguments as `Fn` and the compiler will tell you if you need to change the bound to `FnMut` or `FnOnce`.
 
-*Also worth note:*
+**Also worth note:**
 
 The compiler only looks at the body of the closure to implement the `Fn`, `FnMut` or `FnOnce` traits for a closure. The `move` keyword does not force a closure to only satisfy `FnOnce`.
 
@@ -1091,7 +1179,7 @@ assert_eq!(v1_iter.sum(), 6);
 `#iter_mut`: produces an iterator that lets us iterate over mutable references, requires the collection we begin with is mutable.
 `#into_iter`: Moves ownership and returns owned values.
 
-_Iterator adapters_ allow you to change iterators into different kinds of iterators. Because iterators are lazy, you have to call a _consuming adapter_ at to get the restuls from calls to _iterator adapters_.
+_Iterator adapters_ allow you to change iterators into different kinds of iterators. Because iterators are lazy, you have to call a _consuming adapter_ at to get the results from calls to _iterator adapters_.
 
 ```
 let v1: Vec<i32> = vec![1,2,3];
@@ -1109,12 +1197,12 @@ let v1 = vec![1,2,3];
 v1.iter().map(|x| x + 1).collect::<Vec<_>>();
 ```
 
-Notice the underscore in the _turbofish_ lets us allow the complier to infer the element type we want the resulting collection to have.
+Notice the underscore in the _turbofish_ lets us allow the complier to infer the `Item` type we want the resulting collection to have.
 
 ### Custom Iterators
 See `chapter_13/src/counter.rs`
 
-*note* The iterator constructor methods `#iter`, `#iter_mut`, and `#into_iter` convert collection types like `Vector` into `std::slice::Iter`, `std::slice::IterMut`, and `std::slice::IntoIter` structs, respectively. Each implement the `Iterator` trait. When implement `Iterator` for your own custom type. There is no need to call any constructor methods.
+*note* The iterator constructor methods `#iter`, `#iter_mut`, and `#into_iter` convert collection types like `Vector` into `std::slice::Iter`, `std::slice::IterMut`, and `std::slice::IntoIter` structs, respectively. Each implement the `Iterator` trait. When  you implement `Iterator` for your own custom type, there is no need to call any constructor methods as your type is already any iterator.
 
 ### Zip
 `#zip` returns `None` when either of its input iterators returns `None`
@@ -1132,15 +1220,17 @@ See `chapter_13/src/counter.rs`
 
 1. We want to avoid calling `#clone` in `chapter_12/src/lib.rs#Config::new`, we recognize it would be nice if `#new` owned the command line args that `#main` passes in.
 2. We edit main to pass in the args directly, instead of collecting the args into a vector and borrowing, since `#std::env::args` returns Args, which is an iterator already.
-3. The compiler tells us the type of the args argument needs to change on `#new`, since it is taking a String slice but being given `std::env::Args. We change the signature of `#new` to accept `std::env::Args`. Because we'll be mutating args by iterating over it, 
+3. The compiler tells us the type of the args argument needs to change on `#new`, since it was taking a String slice but being given `std::env::Args`. We change the signature of `#new` to accept `std::env::Args`. Because we'll be mutating args by iterating over it with `#next`, `#new` is now considered a _consuming adapter_ and has to have mutable ownserhip of the iterator, so `Args` is also annotated as `mut`. 
 4. The compiler tells us we cannot index into a value of type `Args` (`let query = args[1].clone();`). We use `#next()` to get each command line arg in order.
 5. A test fails with an error: "not enough arguments. We remove the argument length validation because we are checking that each specific argument gets parsed with `#next()`.
 
 *Question* If we are taking ownership of the iterator are we also taking ownership of the `Vec` that produced it?
 
+Yes.
+
 *Question* When does iterating require a mutable reference because the type that is `Iterator` is modified internally by calling next? This didn't seem to be the case with the examples in `chapter_13/src/main.rs#use_iterator_constructors`.
 
-Answer?: Any method that calls `#next()` on an `Iterator` is mutating and thus consuming it. _Consuming adapters_ like these must take ownership of the `Iterator` and declare it `mut`. We do this manually in `chapter_12/src/lib.rs#run`, but it happens internally in methods like `#for_each` and `#sum`.
+Answer: Any method that calls `#next()` on an `Iterator` is mutating and thus consuming it. _Consuming adapters_ like these must take ownership of the `Iterator` and declare it `mut`. We do this manually in `chapter_12/src/lib.rs#run`, but it happens internally in methods like `#for_each` and `#sum`.
 
 
 ### Upgrading #search
@@ -1151,12 +1241,11 @@ Answer?: Any method that calls `#next()` on an `Iterator` is mutating and thus c
 #### Summary
 
 - If we just want a subset of a collection, `#filter` is our fixer.
-- If we want and iterator that splits a &str by `\n`, `#lines` is our fixer.
-
+- If we want and iterator that splits a str by `\n`, `#lines` is our fixer.
 
 *note* Because the compiler will hide dereferences of borrows, the `&` operator can often be dropped:
 
-`#contains` is impl on str
+`#contains` is defined on str
 ```
 content
     .lines()
@@ -1168,7 +1257,7 @@ So our intution is to do the following:
 ```
 content
     .lines()
-    .filter(|&line| line.contains(query))
+    .filter(|&line: &str| line.contains(query))
     .collect()
 ```
 
@@ -1180,12 +1269,16 @@ content
     .collect()
 ```
 
+Line began as a slice of a slice, but the conversion happens behind the scenes.
+
 ### Zero-Cost Abstractions
 
 Iterators are one of Rust's _zero-cost abstractions_, meaning using the abstraction imposes no additional runtime overhead. The iterator code gets compiled down to roughly the same code as if you'd written the lower-level code yourself.
 
 ### Unrolling
 
-When using an iterator to iterate over a fixed length array, the compiler knows that it can _unroll_ the loop. This means it removes the loop-controlling code. The assembly doesn't have to worry about incrementing the index, or checking the loop bounds. The compliler just repeats the code for each iteration with the array elements hardcoded in place. Often times _unrolling_ allows values in the original array to be stored in registers on the processor, which is a huge performance gain!
+When using an iterator to iterate over a fixed length array, the compiler knows that it can _unroll_ the loop. This means it removes the loop-controlling code. The assembly doesn't have to worry about incrementing the index, or checking the loop bounds. The compliler just repeats the code for each iteration with the array elements hardcoded in place. Often times _unrolling_ allows values in the original array to be stored in registers on the processor, which is a big performance gain!
 
-Rust often does this automatically with both `Iterator` solution and `for` loops solutions. There are facilities available for forcing/disabling this behavior.
+Rust often does this automatically with both `Iterator` solutions and `for` loops solutions. There are facilities available for forcing/disabling this behavior.
+
+## Chapter 14 ()

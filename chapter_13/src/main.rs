@@ -82,6 +82,24 @@ fn main() {
     println!("counter: {:?}", counter);
 
     mess_around_with_vars();
+
+    play_with_closures();
+}
+
+fn apply_to_3<T: FnMut(i32) -> i32>(mut f: T) -> i32 {
+    f(3);
+    f(3)
+}
+
+fn play_with_closures() {
+    let mut y = 5;
+
+    let double = |x| {
+        y = y + 10;
+        2 * x
+    };
+
+    println!("{}", apply_to_3(double));
 }
 
 fn mess_around_with_vars() {
@@ -99,6 +117,9 @@ fn mess_around_with_vars() {
 
     // we can, mutate the reference
     third = &first;
+
+    let fourth = &mut second;
+    fourth[0] = "baz";
 
     // cannot borrow as mutable
     // first[0] = "bar";
