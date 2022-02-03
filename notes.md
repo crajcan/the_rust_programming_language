@@ -1130,3 +1130,62 @@ See `chapter_13/src/counter.rs`
 
 ### Upgrading our minigrep program from Chapter 12
 
+1. We want to avoid calling `#clone` in `chapter_12/src/lib.rs#Config::new`, we recognize it would be nice if `#new` owned the command line args that `#main` passes in.
+2. We edit main to pass in the args directly, instead of collecting the args into a vector and borrowing, since `#std::env::args` returns Args, which is an iterator already.
+3. The compiler tells us the type of the args argument needs to change on `#new`, since it is taking a String slice but being given `std::env::Args. We change the signature of `#new` to accept `std::env::Args`. Because we'll be mutating args by iterating over it, 
+4. The compiler tells us we cannot index into a value of type `Args` (`let query = args[1].clone();`). We use `#next()` to get each command line arg in order.
+5. A test fails with an error: "not enough arguments. We remove the argument length validation because we are checking that each specific argument gets parsed with `#next()`.
+
+*Question* If we are taking ownership of the iterator are we also taking ownership of the `Vec` that produced it?
+
+*Question* When does iterating require a mutable reference because the type that is `Iterator` is modified internally by calling next? This didn't seem to be the case with the examples in `chapter_13/src/main.rs#use_iterator_constructors`.
+
+Answer?: Any method that calls `#next()` on an `Iterator` is mutating and thus consuming it. _Consuming adapters_ like these must take ownership of the `Iterator` and declare it `mut`. We do this manually in `chapter_12/src/lib.rs#run`, but it happens internally in methods like `#for_each` and `#sum`.
+
+
+### Upgrading #search
+
+1. We want to use iterator adapters to be more verbose than using for loops, and to eliminate intermediate mutable collections (functional programming!), which can be mutated haphazardly by future developers and cause bugs. It could also allow parallelism in the future.
+2. We modify `chapter_12/src/lib.rs#search` to use `#lines` and `#filter`
+
+#### Summary
+
+- If we just want a subset of a collection, `#filter` is our fixer.
+- If we want and iterator that splits a &str by `\n`, `#lines` is our fixer.
+
+
+*note* Because the compiler will hide dereferences of borrows, the `&` operator can often be dropped:
+
+`#contains` is impl on str
+```
+content
+    .lines()
+    .filter(|line| line.contains(query))
+    .collect()
+```
+
+So our intution is to do the following:
+```
+content
+    .lines()
+    .filter(|&line| line.contains(query))
+    .collect()
+```
+
+but we see with annotations what happens in the background:
+```
+content
+    .lines()
+    .filter(|line: &&str| line.contains(query))
+    .collect()
+```
+
+### Zero-Cost Abstractions
+
+Iterators are one of Rust's _zero-cost abstractions_, meaning using the abstraction imposes no additional runtime overhead. The iterator code gets compiled down to roughly the same code as if you'd written the lower-level code yourself.
+
+### Unrolling
+
+When using an iterator to iterate over a fixed length array, the compiler knows that it can _unroll_ the loop. This means it removes the loop-controlling code. The assembly doesn't have to worry about incrementing the index, or checking the loop bounds. The compliler just repeats the code for each iteration with the array elements hardcoded in place. Often times _unrolling_ allows values in the original array to be stored in registers on the processor, which is a huge performance gain!
+
+Rust often does this automatically with both `Iterator` solution and `for` loops solutions. There are facilities available for forcing/disabling this behavior.

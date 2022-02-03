@@ -80,6 +80,33 @@ fn main() {
     // custom iterator
     let counter = counter::Counter::new();
     println!("counter: {:?}", counter);
+
+    mess_around_with_vars();
+}
+
+fn mess_around_with_vars() {
+    // mutable owned
+    let first = vec!["foo"];
+    let mut second = vec!["foo"];
+
+    // mutable_reference
+    let mut third = &vec!["foo"];
+
+    second[0] = "bar";
+
+    // cannot do this, it's the reference that is mutable, not the vec
+    // third[0] = "bar";
+
+    // we can, mutate the reference
+    third = &first;
+
+    // cannot borrow as mutable
+    // first[0] = "bar";
+
+    // all give expected struct `Vec`, found `()`
+    // let () = first;
+    // let () = second;
+    // let () = third;
 }
 
 fn use_move_keyword() {
@@ -114,13 +141,36 @@ fn use_iterator_constructors() {
     println!("{}", v2[2]);
 
     println!("{}", "Use #into_iter");
-    // Take ownership of a collection and
+
+    // Take ownership of a collection and drop (consume) each moved value
     let v3 = vec![1, 2, 3];
     let v3_iter = v3.into_iter();
     v3_iter.for_each(|n| drop(n));
 
-    //borrow of moved value;
-    //println!("{}", v3[2]);
+    // borrow of moved value;
+    // println!("{}", v3[2]);
+
+    // Similar to above, take ownership of a collection and return (consume)
+    // each moved value
+    let v4 = vec![1, 2, 3];
+    let v4_iter = v4.into_iter();
+    v4_iter.map(|n| n).collect::<Vec<_>>();
+
+    // borrow of moved value;
+    // println!("{}", v4[2]);
+
+    // Take ownership of a collection and mutate each moved value.
+    // This still appears to consume each value, It appears we cannot
+    // reach the mutated value
+    let v5 = vec![1, 2, 3];
+    let v5_iter = v5.into_iter();
+    v5_iter.for_each(|mut n| n = 42);
+
+    // borrow of moved value;
+    // println!("{}", v5[2]);
+
+    // borrow of moved value;
+    // println!("v5_iter: {:?}", v5_iter);
 }
 
 fn use_consuming_adaptor() {
