@@ -12,20 +12,30 @@ pub struct Config<'a, W: io::Write> {
 }
 
 impl<'a, W: io::Write> Config<'a, W> {
-    pub fn new(args: &[String], writer: &'a mut W) -> Result<Self, &'static str> {
-        if args.len() < 3 {
-            Err("not enough arguments")
-        } else {
-            Ok(Config {
-                query: args[1].clone(),
-                filename: args[2].clone(),
-                case_sensitive: Config::<W>::is_case_sensitive(args.get(3)),
-                output: writer,
-            })
-        }
+    pub fn new(mut args: std::env::Args, writer: &'a mut W) -> Result<Self, &'static str> {
+        args.next();
+
+        let query = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a string"),
+        };
+
+        let filename = match args.next() {
+            Some(arg) => arg,
+            None => return Err("Didn't get a filename"),
+        };
+
+        let case_sensitive_arg = args.next();
+
+        Ok(Config {
+            query: query,
+            filename: filename,
+            case_sensitive: Self::is_case_sensitive(case_sensitive_arg),
+            output: writer,
+        })
     }
 
-    fn is_case_sensitive(command_line_arg: Option<&String>) -> bool {
+    fn is_case_sensitive(command_line_arg: Option<String>) -> bool {
         match command_line_arg {
             Some(s) => match s.as_str() {
                 "case_sensitive" => true,
@@ -59,7 +69,7 @@ pub fn run<W: io::Write>(config: Config<W>) -> Result<(), Box<dyn Error>> {
 pub fn search<'a>(query: &str, content: &'a str) -> Vec<&'a str> {
     content
         .lines()
-        .filter(|&line| line.contains(query))
+        .filter(|line: &&str| line.contains(query))
         .collect()
 }
 

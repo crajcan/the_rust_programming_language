@@ -6,10 +6,9 @@ use std::process;
 use chapter_12::Config;
 
 fn main() {
-    let args = env::args().collect::<Vec<String>>();
     let mut writer = std::io::stdout();
 
-    let config = Config::new(&args, &mut writer).unwrap_or_else(|err| {
+    let config = Config::new(env::args(), &mut writer).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {}", err);
         process::exit(1);
     });
