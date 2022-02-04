@@ -1281,4 +1281,176 @@ When using an iterator to iterate over a fixed length array, the compiler knows 
 
 Rust often does this automatically with both `Iterator` solutions and `for` loops solutions. There are facilities available for forcing/disabling this behavior.
 
-## Chapter 14 ()
+## Chapter 14 (More about Cargo and Crates.io)
+
+### Release Profiles
+
+_Release profiles_ are predefined and customizable profiles with different configurations that allow a programmer to have more control over various options for compiling code.
+
+The two main release profiles are _dev_ (`cargo build`) and _release_ (`cargo build --release`). 
+
+### Overriding a Release Setting:
+
+```
+[profile.dev]
+opt-level = 1
+```
+
+### Publishing a Crate to Crates.io
+
+#### Documentation Comments
+Creating comments using three slashes (`///`) immediately before an item allows us to add documentation that will be generated as HTML. We can use markdown to style the comments. 
+
+Generate the HTML documentation by running `cargo doc`. This will run the _rustdoc_ tool and put the generated HTML in `target/doc`.
+
+`cargo doc --open` will build the HTML for the current crate's documentation and open in the browser.
+
+Sections that commonly appear in docs for a function:
+
+- `# Examples` - Gives one or more code examples often with an assert.
+- `# Panics` - Details the scenarios that could cause a panic.
+- `# Errors` - When the function returns `Result`, the types of errors and the conditions that cause them are often detailed.
+- `# Safety` - If the function is _unsafe_ to call, it should be explained why it is unsafe and details the invariants the callers are expected to uphold.
+
+#### Documenation Comments as Tests
+Any code appear between triple backticks will be run as documentation tests when we run `cargo test`. We can run just the doc tests with `cargo test --doc`.
+
+But we can only write documentation tests for `pub` functions (the testing harness won't find them otherwise, private functions can only be called directly from unit tests).
+
+If we don't want setup code from documentation tests to make it into our HTML examples, we can hide it with `#`:
+
+```
+/// ```
+/// # fn foo() // this function will be hidden when we run "cargo doc"
+/// println!("Hello, world!");
+/// ```
+```
+
+We can escape the `#` that would usually hide a line by repeating it:
+```
+/// let s = "foo
+/// ## bar # baz"
+```
+
+#### Commenting Contained Items
+We can use `//!` to comment the item that contains the comments instead of the item that immediately follows the comments. This is useful for documenting an entire crate or module.
+
+### Re-Exporting with `pub use`
+When desigining your crates's API it can be useful to re-export publilc items that are nested deep in your crate with `pub use`. This will make it appear as though your item were declared wherever you re-exported it. 
+
+Suppose within your `art` crate, you have a `kinds` module with a `PrimaryColor` type. Another crate could use the `PrimaryColor` type by calling `use::kinds::PrimaryColor`. Or if you wanted them just to be able to call `art::PrimaryColor`, then you can re-export `PrimaryColor` by adding `pub use kinds::PrimaryColor` to your `src/lib.rs`.
+
+This will also add the re-exported items to a `Reexports` section on your crate's doc page.
+
+### Publishing a Crate
+
+You can set the name of your crate in `Cargo.toml` like so:
+
+```
+[package]
+name = 'Guessing Game"
+```
+
+Names are allocated first-come first-serve and must be unique.
+
+**!PUBLISHED CODE CANNOT BE DELETED!!!**
+
+*If you accidentally upload any secrets they must be reset immediately!*
+
+### Cargo Workspaces
+_Workspaces_ are useful for further splitting larger crates into multiple library packages
+
+A _workspace_ is essentially a set of packages that all share the same `Cargo.lock` and output directory.
+
+We can create a _workspace_ by adding a Cargo.toml to a directory with the a `[workspace]` section and add `members` as follows:
+
+```
+[workspace]
+
+members = [
+    "adder",
+]
+```
+
+We can then run `cargo new --bin adder` to create a binary crate inside our workspace. it will be a normal crate with it's own `cargo.toml` and `src` directory inside of `adder/`. It will share the `cargo.lock` and `/target` in the root with the other crates in the workspace.
+
+We can add another member create to the workpace as follows:
+
+```
+[workspace]
+
+members = [
+    "adder",
+    "add-one",
+]
+```
+
+and generate it with: `cargo new add-one --lib`.
+
+After we add some code to the add-one library, we can make the `adder` binary depend on it by modifying `adder/src/Cargo.toml`:
+
+```
+[dependencies]
+add-one = { path = "../add-one" }
+```
+
+we can then pull in code from `add-one` in `adder`:
+
+```
+extern crate add_one;
+
+fn main() {
+    let num = 10;
+    println!("Hello, world! {} plus one is {}!", num, add_one::add_one(num));
+}
+```
+
+and build and run it from the top level of the workspace:
+
+```
+cargo build
+```
+
+```
+cargo run -p adder
+```
+
+the `-p` specifices which package in the workspace we want to run. The package name is of course defined by the `Cargo.toml` under that member crate's directory.
+
+#### Depending on an External Crate in a Workspace
+Because all the workspace members share a root `Cargo.lock`, we can make sure they all depend on the same versions of all dependencies.
+
+We can add an external dependency to `add-one/`:
+
+```
+[dependencies]
+
+rand = "0.3.14"
+```
+
+and then use it in `add-one/` with `extern crate rand`. Note we still need to add the dependency to other crates' `Cargo.toml` if we want to use it there. If we add the same dependency line to `adder/`, then cargo will add `rand` to the list of dependencies for adder in `Cargo.lock`, but since we are using the same version in both places, it will not have to download `rand` again.
+
+#### Testing within a workspace
+
+Running `cargo test` in a workspace will run all the tests for all the crates in the workspace. So in our case, `cargo test` runs the unit tests in our lib crate, `add_one/`, then checks for unit tests in `adder/`, but doesn't find any, and then runs the documenation tests in `add_one/`. It doesn't check for documentation tests in `adder/` because it is a binary crate, and cannot have any documentation tests.
+
+We can use the `-p` flag to specify which package's test we would like to run with `cargo test`: `cargo tests -p add_one`.
+
+#### Publishing crates from a workspace
+`cargo publish` does not have a `-p` (package) flag or an `-all` flag, so to publish crates from a workspace, you will have to run `cargo publish` from each crate's individual create directory.
+
+### Cargo Install
+`cargo install` can be used to install crates from `crates.io` that have binary targets (those with a `src/main.rs` or other file specified a binary). All binaries installed with `cargo install` are stored in the installation root's _bin_ folder. If Rust was installed with `rustup` then this will be _$HOME/.cargo/bin_.
+
+Install goes like this:
+
+```
+cargo install ripgrep
+```
+
+View binaries added with cargo install: `ls ~/.cargo/bin`.
+
+### Extending Cargo with Custom Commands
+If a binary in your $PATH is named `cargo-something` you can run it as if it were a build-in cargo subcommand by running `cargo something`.
+
+View custom binaries installed with cargo: `cargo install --list`. Any of these that begin with `cargo-` and be run as though they were cargo built-ins.
