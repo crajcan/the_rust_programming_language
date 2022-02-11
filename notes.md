@@ -2029,3 +2029,367 @@ When we want a child node to reference its parent, however, we do not want the p
 
 Answer: It only could if we didn't have another strong reference to the parent. This would be a bad usage of a tree: we shouldn't have only a reference to the middle of the tree.
 
+## Chapter 16 (Fearless Concurrency)
+
+A major goal of Rust is to leveral the ownership and type systems to provide concurrency errors at compile-time instead of at runtime.
+
+This book talks about _concurrency_ when it means _concurrency and/or parallelism_ it considers _parallelism_ a subset of _concurrency_.
+
+### Using Threads to Run Code Simultaneously
+
+A _process_ and run independent parts of a program in _threads_
+
+Certain problems arise because we can't guarantee the order in which parts of our code will run on different threads:
+
+- _Race Conditions_: threads are accessing data or resources in an inconsistent order
+- _Deadlocks_: two threads are waiting for each other to finish using a resource the other thread has, preventing both threads from continuing
+- Bugs that happen only in certain situations and are hard to reproduce and fix reliably
+
+_1:1_: One operating system thread per one language thread.
+
+_green threads_: threads provided by the programming language executed in the context of a different number of operating system threads.
+
+_M:N_: M green threads per N operating system threads (M and N may be different).
+
+_runtime_: We're talking about code that is included by the language in every binary right now, not the _time that the code is ran_.
+
+Rust has to take advantage of a small _runtime_ in order to call into C to maintain performance. Rust maintains a _1:1_ implementation of threading to help maintain its small _runtime_. _M:N_ models can be utilized via crates to take advantage of more control over which threads run when and lower costs of context switching.
+
+#### Creating a New Thread with `spawn`
+
+To create a new thread we pass a _closure_ to `thread::spawn`. There is no guarantee on the order in which threads run, and when the main (parent) thread shuts down, the spawned threads will end too.
+
+In order to guarantee a thread gets run, and doesn't just end when the scope ends, we can save the return value of `thread::spawn` in a varaible. The type `thread::spawn` returns is a `JoinHandle`. A `JoinHandle` is an owned value that will wait for its thread to finish when we call `#join` on it.
+
+Calling `#join` on the handle blocks the thread currently running until the thread represented by the handle terminates. _Blocking_ is when a thread is prevented from performing work or exiting.
+
+### Using move Closures with Threads
+
+In Chapter 13, we saw that closures can capture variables from their environment, Here we try to capture an immutable reference to a vector in a closure we are passing to a new thread: 
+
+```
+let v = vec![1,2,3];
+
+let handle = thread::spawn(|| {
+    println!("Here's a vector: {:?}", v);
+});
+
+handle.join().unwrap();
+```
+
+This will result in an error: 
+
+```
+25 |     let handle = thread::spawn(|| {
+   |                                ^^ may outlive borrowed value `v`
+26 |         println!("Here's a vector: {:?}", v);
+   |                                           - `v` is borrowed here
+   |
+note: function requires argument type to outlive `'static`
+  --> src/main.rs:25:18
+   |
+25 |       let handle = thread::spawn(|| {
+   |  __________________^
+26 | |         println!("Here's a vector: {:?}", v);
+27 | |     });
+   | |______^
+```
+
+The problem here is that the compiler can't tell how long the spawned thread will run, so it doesn't know whether the reference to `v` will always be valid. We're not allowed to run code like this because it could result in an invalid reference depending on what we do with the borrowed value:
+
+```
+let v = vec![1,2,3];
+
+let handle = thread::spawn(|| {
+    println!("Here's a vector: {:?}", v);
+});
+
+drop(v);
+
+handle.join().unwrap();
+```
+
+The solution is to stop rust from inferring that we want the closure to borrow the captured variable and force the closure to take ownership of it:
+
+```
+let v = vec![1,2,3];
+
+let handle = thread::spawn(move || {
+    println!("Here's a vector: {:?}", v);
+});
+
+handle.join().unwrap();
+```
+
+### Using Message Passing to Transfer Data Between Threads
+
+_Message passing_ is when threads or actors communicate by sending each other messages containing data.
+
+From the _Golang_ docs: "Do not communicate by sharing memory; instead, share memory by communicating.
+
+_channel_: A programming concept used to send messages from a _transmitter_ to a _receiver_.
+
+The _transmitter_ has methods we can call to send data.
+
+The _receiver_ has methods we can call to check for messages.
+
+A channel is _closed_ if either the transmitter or receiver half is dropped.
+
+We can use `#std::sync::mpsc::channel` to create a _multiple producer single consumer_ channel. This will return a `(tx, rx)` (`Sender`, `Receiver`) tuple in the default case. 
+
+We can use `#rx.recv` to block the current thread and return a `Result<T,E>` when a message is sent on the channel. Alternatively `#rx.try_recv` will return a `Result<T,E>` immediately. 
+
+If we make our transmitter delay its message sending, the receiver will wait for the message to be sent with `#tx.recv`:
+
+```
+// multiple producer, single consumer
+let (tx, rx) = mpsc::channel();
+
+thread::spawn(move || {
+    let val = String::from("Hi");
+
+    thread::sleep(Duration::from_millis(1000));
+    tx.send(val).unwrap();
+});
+
+let received = rx.recv().unwrap();
+println!("Got: {}", received);
+```
+
+If we send our message before telling the receiver to listen, the message will be waiting for the receiver when it decides to receive.
+
+```
+// multiple producer, single consumer
+let (tx, rx) = mpsc::channel();
+
+thread::spawn(move || {
+    let val = String::from("Hi");
+
+    tx.send(val).unwrap();
+});
+
+thread::sleep(Duration::from_millis(1000));
+let received = rx.recv().unwrap();
+println!("Got: {}", received);
+```
+
+If we use `#try_recv` to check the channel for messages before there are any, we will receive an `Error`:
+
+```
+// multiple producer, single consumer
+let (tx, rx) = mpsc::channel();
+
+thread::spawn(move || {
+    let val = String::from("Hi");
+
+    thread::sleep(Duration::from_millis(1000));
+    tx.send(val).unwrap();
+});
+
+let received = rx.try_recv().unwrap();
+println!("Got: {}", received);
+```
+
+The channel was empty when we tried to receive without blocking:
+```
+thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: Empty', src/main.rs:74:34
+```
+
+#### Receiving from closed channel: 
+
+When a transmitter or receiver gets dropped, the channel is consdered closed. calling `rx.recv()` on when the receiver's channel is closed will result in an error:
+
+```
+fn use_channels() {
+    // multiple producer, single consumer
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = String::from("Hi");
+
+        tx.send(val).unwrap();
+    });
+
+    let received = rx.recv().unwrap();
+    println!("Got: {}", received);
+    let received = rx.recv().unwrap();
+}
+```
+
+```
+thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: RecvError'
+```
+
+Or if using `rx.try_recv()`:
+
+```
+fn use_channels() {
+    // multiple producer, single consumer
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = String::from("Hi");
+
+        tx.send(val).unwrap();
+    });
+
+    let received = rx.recv().unwrap();
+    println!("Got: {}", received);
+    let received = rx.try_recv().unwrap();
+}
+```
+
+```
+thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: Disconnected'
+```
+
+#### Channels and Ownership Transference 
+
+The signature of send shows that it takes ownership of whatever piece of data "t", it is sending:
+
+```
+pub fn send(&self, t: T) -> Result<(), SendError<T>>
+```
+
+As such, when we send a value, we cannot continue to use it in the transmitting thread.
+
+Notice that `std::sync::mpsc::Receiver` implements Iterator:
+
+```
+for received in rx {
+    println!("Got: {}", received);
+}
+```
+
+Generate a new `std::sync::mpsc::Receiver` for a multiple producer pattern: `let tx1 = tx.clone()`.
+
+### Shared State Concurrency
+
+#### Using Mutexes to Allow Access to Data from One Thread at a Time
+
+_Mutex_ (abbreviated forom "mutual exclusion") holds a lock, which  is a data structure that keeps track of who currenly has exclusive access to the data the _mutex_ holds.
+
+#### Under the hood
+
+A call to `m.lock` where m. is a `Mutex<T>` returns a _smart pointer_, _MutexGuard_. _MutexGuard_ implements _Deref_ to allow us a to acquire a reference to the inner data. _MutexGuard_'s implementation of _Drop_ automatically released the lock when the _MutexGuard_ goes out of scope. This prevents us from forgetting to release the _lock_. `Mutex<T>` also provides interior mutability like `RefCell<T>`, so you can pass an immutable reference to it and still mutate the value it holds.
+
+Mutexes have two usage rules:
+
+- You must attempt to acquire the lock before using the data.
+- When you're done with the data that the mutex guards, you must unlock the data so other threads can acquire the lock.
+
+##### Acquiring the lock
+
+The type system won't let us use the value held by the mutex before we acquire the lock.
+
+To acquire the lock of the _mutex_ you call `m.lock()` which will block the current thread until the lock is available, then return a `Result<MutexGuard<T>, PoisonError<E>>`.
+
+If a thread holding the lock panics, the call to `m.lock()` will fail, preventing from any other thread from acquiring the lock. 
+
+##### Unlocking the data.
+
+As stated above, since the _Mutex_ will return a _MutexGuard_ when we call `m.lock`, and `MutexGuard#drop` will automatically unlock the mutex when it goes out of scope. We can usually count on the _Mutex_ to be unlocked automatically.
+
+#### Sharing Mutexes between threads
+
+See examples `share_data_between_two_threads_with_mutexes` and `share_data_between_many_threads_with_mutexes` in `chapter_16/src/main.rs`.
+
+We can't use `move` a mutex into closures going to two differnent threads, this will result in a compiler error: 
+
+```
+error[E0382]: use of moved value: `counter`
+   --> src/main.rs:199:36
+    |
+195 |     let counter = Mutex::new(0);
+    |         ------- move occurs because `counter` has type `Mutex<i32>`, which does not implement the `Copy` trait
+...
+199 |         let handle = thread::spawn(move || {
+    |                                    ^^^^^^^ value moved into closure here, in previous iteration of loop
+200 |             let mut num = counter.lock().unwrap();
+    |                           ------- use occurs due to use in closure
+```
+
+The answer is to use multiple ownership with a _reference counting pointer_. We might try to use `Rc<Mutex<T>>`, but we would get another error: 
+
+```
+error[E0277]: `Rc<Mutex<i32>>` cannot be sent between threads safely
+   --> src/main.rs:173:18
+    |
+173 |       let handle = thread::spawn(move || {
+    |  __________________^^^^^^^^^^^^^_-
+    | |                  |
+    | |                  `Rc<Mutex<i32>>` cannot be sent between threads safely
+174 | |         let mut num = first_counter_clone.lock().unwrap();
+175 | |
+176 | |         *num += 1;
+177 | |     });
+    | |_____- within this `[closure@src/main.rs:173:32: 177:6]`
+    |
+    = help: within `[closure@src/main.rs:173:32: 177:6]`, the trait `Send` is not implemented for `Rc<Mutex<i32>>`
+    = note: required because it appears within the type `[closure@src/main.rs:173:32: 177:6]`
+note: required by a bound in `spawn`
+   --> /Users/carsonrajcan/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/thread/mod.rs:625:8
+    |
+625 |     F: Send + 'static,
+    |        ^^^^ required by this bound in `spawn`
+```
+
+It turns out `Rc<T>` does not use any "_concurrency primitives_" to make sure that changes to the reference count can't be interrupted by another thread. We need to use `Arc<T>` instead.
+
+`Arc<T>` is the _atomically reference counted_ type. It is safe to use in concurrent situations. _Atomics_ are a "_concurrency primitive_", basically they work just like primitive types but they are thread-safe, this safety comes with a performance penalty, so we don't use them in single threaded scenarios. More about _Atomics_ can be found in `std::sync::atomic`. 
+
+`Arc<T>` has the same api as `Rc<T>`, so we can call `Arc::new(Mutex::new(0))` and `Arc::clone(&counter)`
+
+##### Deadlocks
+
+_deadlocks_ occur when an operation needs to lock two resources and two threads have acquired one of the locks, causing them to wait for each other forever. A program with 2 or more threads, and two or more `Mutex<T>`s could fall victim to _deadlocks_.
+
+**Challenge** Create a program with _deadlocks_, then research _deadlock_ mitigation strategies for mutexes to fix the program. Refer to the docs for `Mutex<T>` and `MutexGuard` for useful information.
+
+### Extensible Concurrency with the Sync and Send Traits
+
+Most concurrency features come from the standard library, not the core Rust language. This is evident by all the imports made in `chapter_16/src/main.rs`. Two concurrency concepts are enbedded in the language, `std::marker` traits `Sync` and `Send`
+
+`std::marker` is a module of primitive traits and types representing basic properties of types.
+
+#### Allowing Transference of Ownership Between Threads with Send
+
+Types that implement `Send` can be transferred between threads. `Rc<T>` is not `Send`, because two or more threads could try to update the reference count at the same time. Any type composed entirely of `Send` types is automaticaly marked `Send`. 
+
+#### Allowing Access from Multiple Threads with Sync
+
+Types that implement `Sync` can be referenced from multiple threads.
+
+_Any type `T` is `Sync` if `&T` is `Send`_
+
+That is, the reference of any `Sync` type can be sent safely to another thread.
+
+Since `Rc<T>` is not `Send`, it is also not `Sync`.
+
+`RefCell<T>` and the other `Cell<T>` types are not `Sync`. The implementation of borow checking `RefCell<T>` does at runtime is not thread-safe.
+
+Remember, `Cell<T>` is similar to a `RefCell<T>` except instead of providing references to the inner value, the value is copied in and out of the `Cell<T>`
+
+Since `Mutex<T>` is `Sync`, we can use it instead of `RefCell<T>` or other `Cell<T>` to share access across multiple threads.
+
+**Question** Why is the runtime borrow checking implemented on `RefCell<T>` not thread-safe?
+
+Possible Answer: It has to enforce the rules about the number of immutable and mutable references in existence but has not way to know what references exist in other threads.
+
+#### Implementing `Send` and `Sync` Manually is `Unsafe`
+
+`Send` and `Sync` are derived automatically for types that are made up of only `Send` and `Sync` types. Also, since they are `std::marker` traits, they don't have any methods to implement.
+
+To implement these traits manually, we would have to implement `unsafe` Rust code. Doing so should be done with great care. The [Rustonomicon](https://doc.rust-lang.org/stable/nomicon/) has more information about these guarantees and how to uphold them.
+
+#### Paraphrasing in Summary:
+
+Reference counting requires ownership and we have to be sure about what threads are doing to change reference counts (`Rc<T>` is not `Send`, can't be sent/owned among multiple theads)
+
+Checking borrow rules requires that we are sure about what other threads are doing with their references. (`RefCell<T>` is not `Sync`, can't be shared among threads)
+
+`Rc<T>` is not `Send`, so it's not `Sync` either.
+
+For sharing data by message passing: use `std::sync::mpsc#channel` with std::sync::mpsc::{Sender, Receiver}.
+
+For sharing ownership of data, use `std::sync::Arc<std::sync::Mutex<T>>`.
