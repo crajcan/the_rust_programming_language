@@ -2393,3 +2393,213 @@ Checking borrow rules requires that we are sure about what other threads are doi
 For sharing data by message passing: use `std::sync::mpsc#channel` with std::sync::mpsc::{Sender, Receiver}.
 
 For sharing ownership of data, use `std::sync::Arc<std::sync::Mutex<T>>`.
+
+## Chapter 17 (Object-Oriented Programming Features of Rust)
+
+_Encapsulation_: The implementation details of an object aren't accessible to the code using that object. The only way to interact with an object is through its public API.
+
+### Inheritance as a Type System and as Code Sharing
+
+Rust does not have inheritance.
+
+Usually you choose to use inheritance for 2 reasons:
+
+1. To reuse code. You can share Rust code using default trait method implementations instead of using inheritance. You can even make a trait with only default trait implementations:
+
+```
+trait Summary {
+    fn summarize(&self) -> String {
+        String::from("foo")
+    }
+}
+
+struct Foo {
+    biz: i32,
+}
+
+impl Summary for Foo {}
+```
+
+You can also override default implementations by redefining them for your type.
+
+If you wanted to match the pattern of calling `super` then performing some other work in your override function, you could use a conditional implementation where you impl the trait for types that implement some other trait. That way you could call methods from that other trait in your override method
+
+2. The other reason to use inheritance is to allow a child type to be used in the same places as the parent type. We usually say that code that case work with data of multiple types is _polymorphic_. Rust uses generics to abscrat over different possible types and trait bounds to impose constraints on what those types must provide. This is referred to as _bounded parametric polymorphism_.
+
+Rust uses _trait objects_ instead of inheritance to avoid two common inheritance problems:
+
+1. Sharing too much code.
+2. Only being able to inherit from one parent 
+
+## Using Trait Objects that Allow for Values of Different Types.
+
+In Chapter 8 we defined an enum `SpreadsheetCell` to hold *integer*, *float* and *text* variants in the same `Vec`. We did not know which enum variants would be in which cells in the `Vec` at compile time, but because knew we had a fixed set of `SpreadSheetCell` types, we were able to use an `enum` to get the code to compile.
+
+If we wanted our library user to be able to extend the set of types they can use with our API, an enum will not work, because it cannot be extended without modifying the API.
+
+We need to use _trait objects_. A _trait object_ points to an instance of a type that implements the trait we specify. We create a _trait object_ by specifying a pointer `&` or `Box<T>` and specifying the relevant trait. Rust can ensure at compile time that any value used in a trait object will implmement the trait object's trait.
+
+_Trait objects_ are more like OOP objects because they combine data and behavior more so than our Rust types usually do. They do not, however, allow for adding data to an object through inheritance.
+
+Definine a _trait object_
+
+```
+pub struct Screen {
+    pub components: Vec<Box<dyn Draw>>,
+}
+```
+_trait objects_ are not allways collection types:
+
+```
+pub struct MyScreen {
+    pub components: Box<dyn Draw>,
+}
+```
+
+Notice that we don't need to define generic type parameters. Generic type parameters guarantee that we only substitute one concrete type at a time, for each paramter. So everywhere you see `T` we're talking about the same concrete type. With _trait objects_ we're allowed to have multiple concrete types fill in for the object, so we don't need to specify a generic type paramter for the implementation block or the method. 
+
+When you know a collection is going to be homogoneous, you should prefer to use generics and trait bounds to allow for monomorphization, which is the compiler's behavior of filling in concrete types at compile time. With _trait objects_, the compiler doesn't know what types will be filled in, so monomorphization is impossible.
+
+The idea of being concerned with the messages a value responds to rather than the value's concrete type is similar to _duck typing_. Our `Screen#run` method in `chapter_17/src/lib.rs` leverages _duck typing_ in that it doesn't care what each component's type is, or how it implements `Draw`. The advantage Rust has over most languages that implement _duck typing_ is that it still will not compile if it is possible for a message (method) to be send (called) on an instance of a type that doesn't implement it.
+
+```
+let screen = Screen {
+    components: vec![
+        Box::new(String::From("Hi")),
+    ],
+};
+
+screen.run();
+```
+
+
+```
+error[E0277]: the trait bound `String: Draw` is not satisfied
+  --> src/main.rs:33:13
+   |
+33 |             Box::new("hello".to_string()),
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Draw` is not implemented for `String`
+   |
+   = note: required for the cast to the object type `dyn Draw`
+```
+
+Here, `String` does not implement the _trait objects_'s trait.
+
+### Trait Objects Perform Dynamic Dispatch
+
+_static dispatch_: when the compiler knows at comiple time what code you are calling.
+_dynamic dispatch_: when the compiler can't tell at compile time which method you're calling. The compiled code will determine what method to call at runtime.
+
+While _trait objects_ allow us some flexibibility over using generics, there is a runtime cost. The running program must spend time finding the right method to call based on the type of the value enclosed in the _trait_object_.
+
+### Object Safety is Required for Trait Objects
+
+Only _object-safe_ traits can be made into trait objects. A trait is _object-safe_ if all the methods defined in the trait have the following properties:
+
+- the return type isn't Self
+- There are no generic type parameters
+
+Once you have used a _trait object_, rust no longer knows the concret type that's implementing that trait.
+
+trait objects do not rememver the concrete type of the values that they hold. So you wouldn't be able to call a trait method that returns `Self` on a trait object, because it would not know what type to return. Similarily, a trait method with a generic type parameter could not be called by a trait object, because it would not know what concrete type to fill in.
+
+Suppose we tried to make a trait object for `Clone` which has a trait method that returns an instance of `Self`:
+
+```
+pub trait Clone {
+    fn clone(&self) -> Self;
+}
+
+pub struct Screen {
+    pub components: Vec<Box<Clone>>,
+}
+```
+
+We get an error:
+
+```
+error[E0038]: the trait `Clone` cannot be made into an object
+ --> src/lib.rs:6:29
+  |
+6 |     pub components: Vec<Box<dyn Clone>>,
+  |                             ^^^^^^^^^ `Clone` cannot be made into an object
+  |
+  = note: the trait cannot be made into an object because it requires `Self: Sized`
+  = note: for a trait to be "object safe" it needs to allow building a vtable to allow the call to be resolvable dynamically; for more information visit <https://doc.rust-lang.org/reference/items/traits.html#object-safety>
+```
+
+Here we see that a "vtable" cannot be made for a trait object using `Clone` because the return type of `Clone::clone` cannot be resolved dynamically, since the trait object does not know anything about the concrete types it holds.
+
+### Implementing an Object-Oriented Design Pattern
+
+In addition to being able to hold values of arbitrary type, trait objects have the advantage over enums in that each type your trait object can hold can have its own implementation. That is, each type that implements the trait is responsible for its own implementation. With enums, the variants cannot have their own implementation, they can only hold types that have their own implementation. 
+
+Because trait objects allow us to hold any type that implements a certain trait, they are perfect for implementing a _state pattern_. We can use a trait object to hold _state objects_, which are values that can represent a certain state, and implement behavior that is related to that state.
+
+An advantage of the _state pattern_ is that it allows for a separation of concerns. Any data structure holding a state object does not need to know the rules of how to manipulate (mutate) the state. That logic can be encoded in the _state objects_ themselves, so if the rules around how the state can be mutated change, the data structures that hold the _state object_ do not need to change, they can just continuing passing messages to the state objects.
+
+#### The `#take` Method
+
+The `#take` method on `Option<T>` returns the enclosed `Some<val>` value and leaves a `None` value in its place. 
+
+This is useful when there is a reference to something holding an `Option<T>` and we want to transfer ownership of the enclosed `Some<T>` value. By replacing the `Some<val>` with `None`, we are able to acquire ownership of `val` without violating the borrowing rules that guarantee the reference will remain valid.
+
+An example is in `chapter_17/src/post.rs` in `Post#request_review`. 
+
+```
+pub fn request_review(&mut self) {
+    if let Some(s) = self.state.take() {
+        self.state = Some(s.request_review())
+    }
+}
+```
+
+Since the signature of `State#request_review()` requires ownership of self: 
+
+```
+fn request_review(self: Box<Self>) -> Box<dyn State> {
+```
+
+It is required that we take ownership of the _state object_ held by the `Post.state` field. This will also force the old _state object_ to be dropped (and freed) when it creates a new state object for the new state.
+
+##### How to remember to use this.
+
+When you have a mutable reference to an `Option<T>` which references something else (on the heap usually), and you want to replace what it is pointing to but can't invalidate the reference.
+
+#### The `#as_ref` Method
+
+`#as_ref` is useful when we want a reference to the value inside an `Option<T>` rather than ownership of the value. Similar to the usecase for `#take`, we would use `#as_ref` when we only have an immutable reference to an `Option<T>`.
+
+```
+pub fn content(&self) -> &str {
+    self.state.as_ref().unwrap().content(&self);
+}
+```
+
+Here we want to call a method on the _state object_ held in an `Option<T>` inside of `Post.state`. We don't have ownership of the `Post` (&self), so we can't take ownership of the _state object_. We also don't have a mutable reference, so we can't use `#take` to take ownership of the _state object_ by replacing it temporarily with `None`. Our only option is to get an immutable reference to the internal _state object_.
+
+Note that this is our only option because calling `unwrap()` on the option without borrowing the option's content first will always move the content, even if we don't assign the option's content.
+
+```
+pub fn content(&self) -> &str {
+    let r = &self.state.unwrap();
+    r.content(&self)
+}
+```
+
+```
+error[E0507]: cannot move out of `self.state` which is behind a shared reference
+  --> src/post.rs:19:18
+   |
+19 |         let r = &self.state.unwrap();
+   |                  ^^^^^^^^^^ move occurs because `self.state` has type `Option<Box<dyn State>>`, which does not implement the `Copy` trait
+   |
+help: consider borrowing the `Option`'s content
+   |
+19 |         let r = &self.state.as_ref().unwrap();
+   |                            +++++++++
+```
+
+**TODO**: Practice ownerships/borrowing rules with `Option<T>`, `#unwrap`, `#take`, and `#as_ref`
+
+In the end we avoid having to match against an enum everywhere we want to use a `Post` in a certain state. However, to guarantee _object-saftey_ we must also duplicate any methods that return `Self` in our trait objects.
