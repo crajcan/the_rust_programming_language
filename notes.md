@@ -2037,7 +2037,7 @@ This book talks about _concurrency_ when it means _concurrency and/or parallelis
 
 ### Using Threads to Run Code Simultaneously
 
-A _process_ and run independent parts of a program in _threads_
+A _process_ can run independent parts of a program in _threads_
 
 Certain problems arise because we can't guarantee the order in which parts of our code will run on different threads:
 
@@ -2197,7 +2197,7 @@ thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: Empty', 
 
 #### Receiving from closed channel: 
 
-When a transmitter or receiver gets dropped, the channel is consdered closed. calling `rx.recv()` on when the receiver's channel is closed will result in an error:
+When a transmitter or receiver gets dropped, the channel is considered closed. calling `rx.recv()` on when the receiver's channel is closed will result in an error:
 
 ```
 fn use_channels() {
@@ -2211,6 +2211,10 @@ fn use_channels() {
     });
 
     let received = rx.recv().unwrap();
+
+    // allow the child thread time to be cleaned up
+    thread::sleep(Duration::from_millis(100));
+
     println!("Got: {}", received);
     let received = rx.recv().unwrap();
 }
@@ -2234,6 +2238,10 @@ fn use_channels() {
     });
 
     let received = rx.recv().unwrap();
+
+    // allow the child thread time to be cleaned up
+    thread::sleep(Duration::from_millis(500));
+
     println!("Got: {}", received);
     let received = rx.try_recv().unwrap();
 }
@@ -2253,6 +2261,8 @@ pub fn send(&self, t: T) -> Result<(), SendError<T>>
 
 As such, when we send a value, we cannot continue to use it in the transmitting thread.
 
+##### Iterating over received messages
+
 Notice that `std::sync::mpsc::Receiver` implements Iterator:
 
 ```
@@ -2261,17 +2271,19 @@ for received in rx {
 }
 ```
 
-Generate a new `std::sync::mpsc::Receiver` for a multiple producer pattern: `let tx1 = tx.clone()`.
+##### Using multiple producers
+
+Generate a new `std::sync::mpsc::Producer` for a multiple producer pattern: `let tx1 = tx.clone()`.
 
 ### Shared State Concurrency
 
 #### Using Mutexes to Allow Access to Data from One Thread at a Time
 
-_Mutex_ (abbreviated forom "mutual exclusion") holds a lock, which  is a data structure that keeps track of who currenly has exclusive access to the data the _mutex_ holds.
+_Mutex_ (abbreviated from "mutual exclusion") holds a lock, which is a data structure that keeps track of who currenly has exclusive access to the data the _mutex_ holds.
 
 #### Under the hood
 
-A call to `m.lock` where m. is a `Mutex<T>` returns a _smart pointer_, _MutexGuard_. _MutexGuard_ implements _Deref_ to allow us a to acquire a reference to the inner data. _MutexGuard_'s implementation of _Drop_ automatically released the lock when the _MutexGuard_ goes out of scope. This prevents us from forgetting to release the _lock_. `Mutex<T>` also provides interior mutability like `RefCell<T>`, so you can pass an immutable reference to it and still mutate the value it holds.
+A call to `m.lock` where `m`. is a `Mutex<T>` returns a _smart pointer_ of type _MutexGuard_. _MutexGuard_ implements _Deref_ to allow us a to acquire a reference to the inner data. _MutexGuard_'s implementation of _Drop_ automatically releases the lock when the _MutexGuard_ goes out of scope. This prevents us from forgetting to release the _lock_. `Mutex<T>` also provides interior mutability like `RefCell<T>`, so you can reference it in an immutable reference and still mutate the value it holds.
 
 Mutexes have two usage rules:
 
@@ -2282,7 +2294,7 @@ Mutexes have two usage rules:
 
 The type system won't let us use the value held by the mutex before we acquire the lock.
 
-To acquire the lock of the _mutex_ you call `m.lock()` which will block the current thread until the lock is available, then return a `Result<MutexGuard<T>, PoisonError<E>>`.
+To acquire the lock of the `Mutex<T>` you call `m.lock()` which will block the current thread until the lock is available, then return a `Result<MutexGuard<T>, PoisonError<E>>`.
 
 If a thread holding the lock panics, the call to `m.lock()` will fail, preventing from any other thread from acquiring the lock. 
 
@@ -2309,7 +2321,7 @@ error[E0382]: use of moved value: `counter`
     |                           ------- use occurs due to use in closure
 ```
 
-The answer is to use multiple ownership with a _reference counting pointer_. We might try to use `Rc<Mutex<T>>`, but we would get another error: 
+The answer is to enable ultiple ownership with a _reference counting pointer_. We might try to use `Rc<Mutex<T>>`, but we would get another error: 
 
 ```
 error[E0277]: `Rc<Mutex<i32>>` cannot be sent between threads safely
@@ -2342,7 +2354,7 @@ It turns out `Rc<T>` does not use any "_concurrency primitives_" to make sure th
 
 ##### Deadlocks
 
-_deadlocks_ occur when an operation needs to lock two resources and two threads have acquired one of the locks, causing them to wait for each other forever. A program with 2 or more threads, and two or more `Mutex<T>`s could fall victim to _deadlocks_.
+_deadlocks_ occur when an operation needs to lock two resources and two threads have each acquired one of the locks, causing them to wait for each other to release the other lock forever. A program with 2 or more threads, and two or more `Mutex<T>`s could fall victim to _deadlocks_.
 
 **Challenge** Create a program with _deadlocks_, then research _deadlock_ mitigation strategies for mutexes to fix the program. Refer to the docs for `Mutex<T>` and `MutexGuard` for useful information.
 
@@ -2354,7 +2366,7 @@ Most concurrency features come from the standard library, not the core Rust lang
 
 #### Allowing Transference of Ownership Between Threads with Send
 
-Types that implement `Send` can be transferred between threads. `Rc<T>` is not `Send`, because two or more threads could try to update the reference count at the same time. Any type composed entirely of `Send` types is automaticaly marked `Send`. 
+Types that implement `Send` can be moved between threads. `Rc<T>` is not `Send`, because two or more threads could try to update the reference count at the same time. Any type composed entirely of `Send` types is automaticaly marked `Send`. 
 
 #### Allowing Access from Multiple Threads with Sync
 
@@ -2390,7 +2402,7 @@ Checking borrow rules requires that we are sure about what other threads are doi
 
 `Rc<T>` is not `Send`, so it's not `Sync` either.
 
-For sharing data by message passing: use `std::sync::mpsc#channel` with std::sync::mpsc::{Sender, Receiver}.
+For sharing data by message passing: use `std::sync::mpsc#channel` with `std::sync::mpsc::{Sender, Receiver}`.
 
 For sharing ownership of data, use `std::sync::Arc<std::sync::Mutex<T>>`.
 
