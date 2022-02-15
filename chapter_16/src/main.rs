@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use std::sync::mpsc;
+use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -84,6 +84,25 @@ fn move_over_channels() {
         tx.send(val).unwrap();
         // used after move
         // println!("val: {}", val);
+    });
+
+    let received = rx.recv().unwrap();
+    println!("Got: {}", received);
+}
+
+fn move_reference_over_channels() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = String::from("Hi");
+
+        // We can't send a reference &val because val will be dropped at the
+        // end of this thread, so the borrow we send will outlive the value
+        // tx.send(&val).unwrap();
+        // println!("val: {}", val);
+
+        // the solution is to just transfer ownership
+        tx.send(val).unwrap();
     });
 
     let received = rx.recv().unwrap();
@@ -215,6 +234,37 @@ fn share_data_between_many_threads_with_mutexes() {
     println!("Result: {}", *counter.lock().unwrap());
 }
 
+fn fix_a_deadlock() {
+    let strikes = Arc::new(Mutex::new(0));
+    let outs = Arc::new(Mutex::new(0));
+
+    let strikes_clone = Arc::clone(&strikes);
+    let outs_clone = Arc::clone(&outs);
+
+    let score_book_keeper = thread::spawn(move || {
+        let mut out_count = outs_clone.lock().unwrap();
+        thread::sleep(Duration::from_millis(200));
+
+        // waits for strikes lock before giving up outs lock
+        let mut strike_count = strikes_clone.lock().unwrap();
+
+        *strike_count += 1;
+        *out_count += 1;
+    });
+
+    let mut strike_count = strikes.lock().unwrap();
+    thread::sleep(Duration::from_millis(200));
+
+    *strike_count += 1;
+
+    // waits for outs lock before giving up strikes lock
+    println!(
+        "strikes: {}, outs: {}",
+        *strike_count,
+        *outs.lock().unwrap()
+    );
+}
+
 fn main() {
     practice_blocking_with_handle_join();
 
@@ -228,6 +278,8 @@ fn main() {
 
     move_over_channels();
 
+    move_reference_over_channels();
+
     sending_multiple_messages();
 
     multiple_producers();
@@ -237,4 +289,6 @@ fn main() {
     share_data_between_two_threads_with_mutexes();
 
     share_data_between_many_threads_with_mutexes();
+
+    fix_a_deadlock();
 }
