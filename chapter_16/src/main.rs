@@ -234,34 +234,75 @@ fn share_data_between_many_threads_with_mutexes() {
     println!("Result: {}", *counter.lock().unwrap());
 }
 
-fn fix_a_deadlock() {
-    let strikes = Arc::new(Mutex::new(0));
+fn deadlock_example() {
+    let strikes = Arc::new(Mutex::new(2));
     let outs = Arc::new(Mutex::new(0));
 
     let strikes_clone = Arc::clone(&strikes);
     let outs_clone = Arc::clone(&outs);
 
     let score_book_keeper = thread::spawn(move || {
-        let mut out_count = outs_clone.lock().unwrap();
-        thread::sleep(Duration::from_millis(200));
-
-        // waits for strikes lock before giving up outs lock
         let mut strike_count = strikes_clone.lock().unwrap();
-
+        thread::sleep(Duration::from_millis(200));
         *strike_count += 1;
-        *out_count += 1;
+
+        if *strike_count == 3 {
+            // waits for outs lock before giving up strikes lock
+            let mut out_count = outs_clone.lock().unwrap();
+            *out_count += 1;
+        }
+
+        *strike_count = 0;
     });
 
-    let mut strike_count = strikes.lock().unwrap();
+    let mut out_count = outs.lock().unwrap();
     thread::sleep(Duration::from_millis(200));
 
-    *strike_count += 1;
+    *out_count += 1;
 
-    // waits for outs lock before giving up strikes lock
+    // waits for strikes lock before giving up strikes lock
+    // println!(
+    //     "strikes: {}, outs: {}",
+    //     *strikes.lock().unwrap(),
+    //     *out_count,
+    // );
+}
+
+// we can fix the deadlock by ensuring that every thread always locks mutexes
+// in the same order. This way, a given thread won't begin locking mutexes until
+// all mutexes are unlocked.
+fn fixed_deadlock_example() {
+    let strikes = Arc::new(Mutex::new(2));
+    let outs = Arc::new(Mutex::new(0));
+
+    let strikes_clone = Arc::clone(&strikes);
+    let outs_clone = Arc::clone(&outs);
+
+    let score_book_keeper = thread::spawn(move || {
+        // we lock outs first to match the order of the main thread.
+        let mut out_count = outs_clone.lock().unwrap();
+        let mut strike_count = strikes_clone.lock().unwrap();
+
+        thread::sleep(Duration::from_millis(200));
+
+        *strike_count += 1;
+
+        if *strike_count == 3 {
+            *out_count += 1;
+        }
+
+        *strike_count = 0;
+    });
+
+    let mut out_count = outs.lock().unwrap();
+    thread::sleep(Duration::from_millis(200));
+
+    *out_count += 1;
+
     println!(
         "strikes: {}, outs: {}",
-        *strike_count,
-        *outs.lock().unwrap()
+        *strikes.lock().unwrap(),
+        *out_count,
     );
 }
 
@@ -290,5 +331,7 @@ fn main() {
 
     share_data_between_many_threads_with_mutexes();
 
-    fix_a_deadlock();
+    deadlock_example();
+
+    fixed_deadlock_example();
 }
