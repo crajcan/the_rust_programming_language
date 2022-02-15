@@ -2421,7 +2421,7 @@ Usually you choose to use inheritance for 2 reasons:
 ```
 trait Summary {
     fn summarize(&self) -> String {
-        String::from("foo")
+        String::from("hello world")
     }
 }
 
@@ -2436,12 +2436,12 @@ You can also override default implementations by redefining them for your type.
 
 If you wanted to match the pattern of calling `super` then performing some other work in your override function, you could use a conditional implementation where you impl the trait for types that implement some other trait. That way you could call methods from that other trait in your override method
 
-2. The other reason to use inheritance is to allow a child type to be used in the same places as the parent type. We usually say that code that case work with data of multiple types is _polymorphic_. Rust uses generics to abscrat over different possible types and trait bounds to impose constraints on what those types must provide. This is referred to as _bounded parametric polymorphism_.
+2. The other reason to use inheritance is to allow a child type to be used in the same places as the parent type. We usually say that code that can work with data of multiple types is _polymorphic_. Rust uses generics to abstract over different possible types and trait bounds to impose constraints on what those types must provide. This is referred to as _bounded parametric polymorphism_.
 
 Rust uses _trait objects_ instead of inheritance to avoid two common inheritance problems:
 
 1. Sharing too much code.
-2. Only being able to inherit from one parent 
+2. Only being able to inherit from one parent. (a type enclosed in a trait object could implement the trait the trait object uses, but also implement any other number of traits)
 
 ## Using Trait Objects that Allow for Values of Different Types.
 
@@ -2449,7 +2449,7 @@ In Chapter 8 we defined an enum `SpreadsheetCell` to hold *integer*, *float* and
 
 If we wanted our library user to be able to extend the set of types they can use with our API, an enum will not work, because it cannot be extended without modifying the API.
 
-We need to use _trait objects_. A _trait object_ points to an instance of a type that implements the trait we specify. We create a _trait object_ by specifying a pointer `&` or `Box<T>` and specifying the relevant trait. Rust can ensure at compile time that any value used in a trait object will implmement the trait object's trait.
+We would need to use _trait objects_. A _trait object_ points to an instance of a type that implements the trait we specify. We create a _trait object_ by specifying a pointer `&` or `Box<T>` and specifying the relevant trait. Rust can ensure at compile time that any value used in a trait object will implmement the trait object's trait.
 
 _Trait objects_ are more like OOP objects because they combine data and behavior more so than our Rust types usually do. They do not, however, allow for adding data to an object through inheritance.
 
@@ -2464,7 +2464,7 @@ _trait objects_ are not allways collection types:
 
 ```
 pub struct MyScreen {
-    pub components: Box<dyn Draw>,
+    pub component: Box<dyn Draw>,
 }
 ```
 
@@ -2472,7 +2472,7 @@ Notice that we don't need to define generic type parameters. Generic type parame
 
 When you know a collection is going to be homogoneous, you should prefer to use generics and trait bounds to allow for monomorphization, which is the compiler's behavior of filling in concrete types at compile time. With _trait objects_, the compiler doesn't know what types will be filled in, so monomorphization is impossible.
 
-The idea of being concerned with the messages a value responds to rather than the value's concrete type is similar to _duck typing_. Our `Screen#run` method in `chapter_17/src/lib.rs` leverages _duck typing_ in that it doesn't care what each component's type is, or how it implements `Draw`. The advantage Rust has over most languages that implement _duck typing_ is that it still will not compile if it is possible for a message (method) to be send (called) on an instance of a type that doesn't implement it.
+The idea of being concerned with the messages a value responds to rather than the value's concrete type is similar to _duck typing_. Our `Screen#run` method in `chapter_17/src/lib.rs` leverages _duck typing_ in that it doesn't care what each component's type is, or how it implements `Draw`. The advantage Rust has over most languages that implement _duck typing_ is that it still will not compile if it is possible for a message (method) to be sent (called) when the value is of a type that doesn't implement it.
 
 ```
 let screen = Screen {
@@ -2502,7 +2502,7 @@ Here, `String` does not implement the _trait objects_'s trait.
 _static dispatch_: when the compiler knows at comiple time what code you are calling.
 _dynamic dispatch_: when the compiler can't tell at compile time which method you're calling. The compiled code will determine what method to call at runtime.
 
-While _trait objects_ allow us some flexibibility over using generics, there is a runtime cost. The running program must spend time finding the right method to call based on the type of the value enclosed in the _trait_object_.
+While _trait objects_ allow us some flexibibility over using generics, there is a runtime cost. The running program must spend time finding the right method to call based on the type of the value enclosed in the _trait object_.
 
 ### Object Safety is Required for Trait Objects
 
@@ -2511,9 +2511,9 @@ Only _object-safe_ traits can be made into trait objects. A trait is _object-saf
 - the return type isn't Self
 - There are no generic type parameters
 
-Once you have used a _trait object_, rust no longer knows the concret type that's implementing that trait.
+Once you have created a _trait object_, the runnign program no longer knows the concrete type that's implementing that trait.
 
-trait objects do not rememver the concrete type of the values that they hold. So you wouldn't be able to call a trait method that returns `Self` on a trait object, because it would not know what type to return. Similarily, a trait method with a generic type parameter could not be called by a trait object, because it would not know what concrete type to fill in.
+trait objects do not remember the concrete type of the values that they hold. So you wouldn't be able to call a trait method that returns `Self` on a trait object, because it would not know what type to return. Similarily, a trait method with a generic type parameter could not be called by a trait object, because it would not know what concrete type to fill in.
 
 Suppose we tried to make a trait object for `Clone` which has a trait method that returns an instance of `Self`:
 
@@ -2540,7 +2540,19 @@ error[E0038]: the trait `Clone` cannot be made into an object
   = note: for a trait to be "object safe" it needs to allow building a vtable to allow the call to be resolvable dynamically; for more information visit <https://doc.rust-lang.org/reference/items/traits.html#object-safety>
 ```
 
-Here we see that a "vtable" cannot be made for a trait object using `Clone` because the return type of `Clone::clone` cannot be resolved dynamically, since the trait object does not know anything about the concrete types it holds.
+Here we see that a "vtable" entry cannot be made for `clone` for a typebecause the return type of `Clone::clone` cannot be resolved dynamically, since the trait object does not know anything about the concrete types it holds.
+
+**Question**: We now know that a vtable has to be made for trait objects to allow for dynamic dispatch. The compiler cannot perform static dispatch on arbitrary values that might go into the trait object. As such, a vtable needs to be created for each value that is used in the trait object, so the running program knows what methods to call on that value. Why, instead of a vtable, can't the trait object just hold store the concrete type of the value, so we can find the methods defined on that value at runtime?
+
+Answer: Basically when you have a block of memory in a running program, there is no information about what type it is. The compiler guaranteed that it will only be used in a valid way, but there is no way to determine what type it is. To store type information about each block of memory would create a lot of extra overhead.
+
+From https://stackoverflow.com/questions/67767207/why-are-trait-methods-with-generic-type-parameters-object-unsafe, there is the comment:
+
+```
+Having a pointer to some memory is not the same as knowing specific information about the type of data being pointed at. vtables are a means of representing type-related data for use at runtime. In the case of returning Self, your call to echo() allocates space on the stack for the return value of the function, before the funciton is called, and that size is determined at compile time, not at run time. Variable size stack allocations are pretty rare, and having to look at a vtable to decide how much stack size to allocate would also be a lot of additional complexity, and slow things down. – 
+loganfsmyth
+ May 31 2021 at 20:52
+ ```
 
 ### Implementing an Object-Oriented Design Pattern
 
@@ -2554,7 +2566,7 @@ An advantage of the _state pattern_ is that it allows for a separation of concer
 
 The `#take` method on `Option<T>` returns the enclosed `Some<val>` value and leaves a `None` value in its place. 
 
-This is useful when there is a reference to something holding an `Option<T>` and we want to transfer ownership of the enclosed `Some<T>` value. By replacing the `Some<val>` with `None`, we are able to acquire ownership of `val` without violating the borrowing rules that guarantee the reference will remain valid.
+This is useful when there is a mutable reference to something holding an `Option<T>` and we want to transfer ownership of the enclosed `Some<T>` value. By replacing the `Some<val>` with `None`, we are able to acquire ownership of `val` without violating the borrowing rules that guarantee the reference will remain valid.
 
 An example is in `chapter_17/src/post.rs` in `Post#request_review`. 
 
