@@ -2627,3 +2627,661 @@ help: consider borrowing the `Option`'s content
 **TODO**: Practice ownerships/borrowing rules with `Option<T>`, `#unwrap`, `#take`, and `#as_ref`
 
 In the end we avoid having to match against an enum everywhere we want to use a `Post` in a certain state. However, to guarantee _object-saftey_ we must also duplicate any methods that return `Self` in our trait objects.
+
+## Chapter 18 (Patterns and Matching)
+
+### While let
+
+Run a loop until the match fails.
+
+```
+let mut stack = vec![];
+
+stack.push(1);
+stack.push(2);
+stack.push(3);
+
+while let Some(top) = stack.pop() {
+    println!("{}", top);
+}
+```
+
+### let statements
+
+All `let` statements use patterns, just as `match` and `if let`. Unlike `if let`, `let` must be exhaustive:
+
+```
+    let v = vec!['a', 'b', 'c'];
+
+    let Some((i, val)) = v.iter().enumerate().next();
+
+    println!("{} is my index, {} is my value", i, val);
+```
+
+This is a case where we would have to use `if let` to ignore the `else` case where the pattern can't match a `None`:
+
+```
+error[E0005]: refutable pattern in local binding: `None` not covered
+   --> src/main.rs:21:9
+    |
+21  |     let Some((i, val)) = v.iter().enumerate().next();
+    |         ^^^^^^^^^^^^^^ pattern `None` not covered
+    |
+   ::: /Users/carsonrajcan/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:514:5
+    |
+514 |     None,
+    |     ---- not covered
+    |
+    = note: `let` bindings require an "irrefutable pattern", like a `struct` or an `enum` with only one variant
+    = note: for more information, visit https://doc.rust-lang.org/book/ch18-02-refutability.html
+    = note: the matched value is of type `Option<(usize, &char)>`
+help: you might want to use `if let` to ignore the variant that isn't matched
+    |
+21  |     if let Some((i, val)) = v.iter().enumerate().next() { /* */ }
+    |
+```
+
+### Multiple Assignment
+
+We can assign to multiple variables at once using a pattern:
+
+`let (x,y,z) = (1,2,3);`
+
+If the pattern on the left and the value on the right have different types we'll get a mismatched types error:
+
+`let (x,y) = (1,2,3);`
+
+```
+error[E0308]: mismatched types
+  --> src/main.rs:34:9
+   |
+34 |     let (x, y) = (1, 2, 3);
+   |         ^^^^^^   --------- this expression has type `({integer}, {integer}, {integer})`
+   |         |
+   |         expected a tuple with 3 elements, found one with 2 elements
+   |
+   = note: expected tuple `({integer}, {integer}, {integer})`
+              found tuple `(_, _)`
+```
+
+Ignore a value: `let (x,_,z) = (1,2,3);`
+
+Match in Function params:
+
+```
+fn print_coordinates(&(x, y): &(i32, i32)) {
+    println!("current location: ({}, {})", x, y);
+}
+```
+
+This also works in closures:
+
+```
+let c = |&(x, y)| {
+    println!("current location: ({}, {})", x, y);
+};
+
+c(&(3, 5));
+```
+
+### Refutability
+
+Patterns that will match for all possible values passed are _irrefutable_. 
+Patterns that can fail to match for some possible value are _refutable_.
+
+Function paramters, `let` statements, and `for` loops can only accept _irrefutable_ patterns because the program would not know what to do if the patterns did not match.
+
+`if let` and `while let` expressions can only accept _refutable_ patterns, because they are designed to handle the failure condition from a match.
+
+Similar to above:
+
+```
+let foo = Some(1);
+let Some(x) = foo;
+```
+
+The compiler cannot can not know that this will always match, since foo could be passed in by the user
+
+```
+error[E0005]: refutable pattern in local binding: `None` not covered
+```
+
+Similarily if we try to use an _irrefutable_ pattern where a _refutable_ one is expected: 
+
+```
+let foo = 1;
+
+if let x = foo {
+    println!("x is {}", x);
+}
+```
+
+This has been downgraded to a warning, It's like saying `if true` and shaddowing the value `foo`. Also:
+
+```
+let foo = 1;
+
+match foo {
+    x => println!("foo"),
+}
+```
+
+### Pattern Syntax
+
+#### Matching literals: 
+
+```
+let x = 1;
+
+match x {
+    1 => println!("one"),
+    2 => println!("two"),
+    _ => println!("larger"),
+}
+```
+
+#### Matching named variables:
+
+```
+let x = Some(5);
+let y = 10;
+
+match x {
+    Some(50) => println!("Got 50"),
+    Some(y) => println!("Matched, y = {:?}", y),
+    _ => println!("Default case, x = {:?}", x),
+}
+```
+
+This will match any `Some(val)` where `val` is not `50`, and bind `val` to the variable `y`, which is shadowed in the scope of the match. After the match expression ends, `y` is again `10`.
+
+#### Multiple Patterns
+
+```
+let x = 1;
+
+match x {
+    1 | 2 => println!("one or two"),
+    3 => println!("three"),
+    _ => println!("anything"),
+}
+```
+
+#### Matching Ranges
+
+We can match an inclusive range of chars or numerics:
+
+```
+let x = 5;
+
+match x {
+    1..=5 => println!("one through five"),
+    _ => println!("something else"),
+}
+```
+
+```
+let x = 'c';
+
+match x {
+    'a'...'j' => println!("early ASCII letter"),
+    'k'..='z' => println!("later ASCII letter"),
+    _ => println!("something else"),
+}
+```
+
+Exclusive ranges are **EXPERIMENTAL** in match arms! Probably because it doesn't make sense to have a match arm list a value you don't want to match!. `1..5 => println!("foo");` would not match 5, which is confusing.
+
+#### Destructuring
+
+##### Structs
+
+```
+let p = Point { x: 0, y: 7 }
+let Point { x: a, y: b } = p;
+
+assert_eq!(0, a);
+assert_eq!(7, b);
+```
+
+or if you want your new variable to match the field names of the struct:
+
+```
+fn print_coordinates(p: Point) {
+    let Point{ x, y } = p;
+    println!("I'm at {}, {}!", x, y);
+}
+```
+
+```
+fn which_axis(p: &Point) {
+    match p {
+        Point { x: 0, y: 0 } => println!("On both axis at ({},{})", p.x, p.y),
+        Point { x, y: 0 } => println!("On the x axis at {}", x),
+        Point { x: 0, y } => println!("On the y axis at {}", y),
+        Point { x, y } => println!("one neither axis!"),
+    }
+}
+```
+
+##### Enums
+
+```
+enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    ChangeColor(i32, i32, i32),
+}
+
+fn main() {
+    let msg = Message::ChangeColor(0, 160, 255);
+
+    match msg {
+        Message::Quit => {
+            println!("The Quit variant has no data to destructure.")
+        }
+        Message::Move { x, y } => {
+            println!(
+                "Move in the x direction {} and in the y direction {}",
+                x, y
+            );
+        }
+        Message::Write(text) => println!("Text message: {}", text),
+        Message::ChangeColor(r, g, b) => println!(
+            "Change the color to red {}, green {}, and blue {}",
+            r, g, b
+        ),
+    }
+}
+```
+
+**Challenge** Figure out why the `chapter_18/src/main.rs#challenge_str` function doesn't compile.
+
+Answer: You can't bind a str to a local var because it doesn't have a size known at compile time.
+It is unsized, as is [T].
+
+**Challenge** Figure out why the `chapter_18/src/main.rs#challenge_string` function doesn't compile.
+
+Answer: You're essentially trying to move the value pointed to by x into y. But x doesn't own the value so you can't transfer ownership from it.
+
+**Challenge** figure out why `chapter_18/src/main.rs#destructuring_references` doesn't work when we try to deref in the match. 
+Answer: The difference here is that in the closure, we are specifying that
+the argument should be a reference to a `Point`, and then we are copying
+ x & y. In the match expression, we are trying to transfer ownership of the
+value pointed to by the &Point from the array to the variable 'p'.
+
+Notice when we try to use the same pattern from some_of_squares in
+"sum_of_strings" we get the same "cannot move out shared reference" error
+
+**Challenge** Try to use destructuring to avoid having to use `#as_ref` as we did in the examples in chapter 17.
+
+Answer: it looks like it is possible:
+
+```
+if let StringHolder { val: Some(s: &String) } = holder_ref {
+    println!("capacity of string: {}", s.capacity());
+}
+```
+See `chapter_18/src/main.rs#borrow_nested_data_that_is_borrowed`.
+
+**Follow up**: So when are `ref` and `ref mut` used for in destructuring? Use them to destructure The `&StringHolder` and avoid using `as_ref` in `chapter_18/src/main.rs#borrow_nested_data_that_is_owned`
+
+It turns out we need to use `ref` when destructuring to get a reference into nested date of an _owned_ value. When the value is borrowed, we can get a reference into its nested data for free--we're just copying references.
+
+#### Ignoring Entire Values With _
+
+```
+fn foo(_: i32, y: i32) {
+    println!("This code only usees the y parameter: {}", y);
+}
+```
+
+The compiler will usually suggest to do this
+
+#### Ignoring Parts of a Value with a Nested _
+
+```
+let p = Point { x: 1, y: 3 };
+let Point { x: a, y: _ } = p;
+println!("a is {}", a);
+```
+
+#### Ignoring usused variables with a leading _
+
+Compiler warning: 
+
+```
+fn main() {
+    let x = 5;
+}
+```
+
+No compiler warning: 
+
+```
+fn main() {
+    let _x = 5;
+}
+```
+
+Prints "_x = 5":
+
+```
+fn main() {
+    let _x = 5;
+    println!("_x = {}", _x);
+}
+```
+
+Value borrowed after move:
+
+```
+fn main() {
+    let _x = 5;
+    takes_ownership(_x);
+    println!("_x = {}", 5);
+}
+```
+
+So using a leading `_` still causes the variable to bind to the value!
+
+#### Ignoring Remaining Parts of a Value with ..
+
+With structs:
+
+```
+struct Point {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+let origin = Point { x: 0, y: 0, z: 0 };
+
+match origin {
+    Point {x, .. } => println!("x is {}", x):
+}
+```
+
+with tuples:
+
+```
+let numbers = (2, 4, 8, 16, 32);
+
+match numbers {
+    (first, .., last) => {
+        println!("Some numbers: {}, {}", first, last);
+    },
+}
+```
+
+
+with vectors: 
+```
+let numbers = vec![2, 4, 8, 16, 32];
+
+match numbers[..] {
+    [first, second, .., last] => {
+        println!("Some numbers: {}", second)
+    }
+    _ => println!("too many numbers!"),
+}
+```
+
+##### Using .. in patterns must be unambiguous:
+
+```
+fn main() {
+    let numbers = (2, 4, 8, 16, 32);
+
+    match numbers {
+        (.., second, ..) => {
+            println!("Some numbers: {}", second)
+        },
+    }
+}
+
+```
+
+We see the resulting error:
+
+```
+$ cargo run
+   Compiling patterns v0.1.0 (file:///projects/patterns)
+error: `..` can only be used once per tuple pattern
+ --> src/main.rs:5:22
+  |
+5 |         (.., second, ..) => {
+  |          --          ^^ can only be used once per tuple pattern
+  |          |
+  |          previously used here
+```
+
+### Creating References in Patterns with ref and ref mut
+
+#### Creating an immutable reference while restructuring.
+
+When we want to avoid a _partial move_ (taking ownership of a nested piece of data), we can create a reference to the nested data.
+
+When trying to create a reference into a nested data structure that is owned, we might have the inclination to destructure using `&x`, however, when used in destructuring patterns, `&` does not _create_ a reference, but actually matches an existing reference:
+
+```
+let robot_name = Some(String::from("Bors"));
+
+match robot_name {
+    some(&name) => println!("Found a name: {}", name);
+}
+
+println!("robot_name is: {:?}", robot_name);
+```
+
+Using `&` here will yield an error: 
+
+```
+error[E0308]: mismatched types
+   --> src/main.rs:234:14
+    |
+233 |     match robot_name {
+    |           ---------- this expression has type `Option<String>`
+234 |         Some(&name) => println!("Found a name: {}", name),
+    |              ^^^^^
+    |              |
+    |              expected struct `String`, found reference
+    |              help: you can probably remove the explicit borrow: `name`
+    |
+```
+
+The solution is to use the `ref` keyword to create a reference while destructuring: 
+
+```
+let robot_name = Some(String::from("Bors"));
+
+match robot_name {
+    some(ref name) => println!("Found a name: {}", name);
+}
+
+println!("robot_name is: {:?}", robot_name);
+```
+
+#### Creating a mutable reference while restructuring.
+
+Similarily, we cannot use `&mut` while destructuring to create a mutable reference into nested mutable owned data. `&mut` can only be used to match existing mutable references.
+
+
+```
+let mut robot_name = Some("borg".to_string());
+
+match robot_name {
+    Some(&mut name) => *name = "blork".to_string(),
+    None => ()
+}
+
+println!("robot_name: {:?}", robot_name);
+```
+Just like we saw above, this will not compile because `robot_name` is an `Option<String>`, not an `Option<&mut String>`:
+
+```
+error[E0308]: mismatched types
+   --> src/main.rs:234:14
+    |
+233 |     match robot_name {
+    |           ---------- this expression has type `Option<String>`
+234 |         Some(&mut name) => *name = Some("blork".to_string()),
+    |              ^^^^^^^^^
+    |              |
+    |              expected struct `String`, found `&mut _`
+    |              help: you can probably remove the explicit borrow: `name`
+    |
+    = note:         expected struct `String`
+            found mutable reference `&mut _`
+```
+
+We can fix this by using `ref mut`:
+
+```
+let mut robot_name = Some("borg".to_string());
+
+match robot_name {
+    Some(ref mut name) => *name = "blork".to_string(),
+    None => (),
+}
+
+println!("robot_name: {:?}", robot_name);
+```
+
+**note** the only way to use `&` or `&mut` in a pattern to actually match a value is if the nested value you are trying to match implments Copy. Otherwise you are attempting to take ownership of a shared reference
+
+**will compile**:
+
+```
+let v = vec!["foo", "bar"];
+
+match v.iter().next() {
+    Some(&x) => println!("got x"),
+    None => println!("got x"),
+}
+
+println!("v: {:?}", v);
+```
+
+**won't compile**:
+
+```
+let v = vec!["foo".to_string(), "bar".to_string()];
+
+match v.iter().next() {
+    Some(&x) => println!("got x"),
+    None => println!("got x"),
+}
+
+println!("v: {:?}", v);
+```
+
+### Extra Conditionals in Match Guards
+
+Create a match guard by appending an `if` expression to a pattern. Match guards allow us to compare things that can't be expressed using a pattern alone.
+
+```
+let num = Some(4);
+
+match num {
+    Some(x) if x < 5 => println!("less than five: {}", x),
+    Some(x) => println!("x: {}", x),
+    None => (),
+}
+```
+
+Match guards can also be used to compare values bound to variables from the outer scope:
+
+```
+let x = Some(5);
+let y = 10;
+
+match x {
+    Some(50) => println!("Got 50),
+    Some(n) if n == y => println!("Matched, n = {:?}", x),
+    _ => println!("Default case, x = {:?}", x)
+}
+```
+
+#### | with match guards
+
+When an `|` is used in a pattern, the `|` expression takes precedence over a match guard:
+
+```
+let x = 4;
+let y = false;
+
+match x {
+    4 | 5 | 6 if y => println!("yes"),
+    _ => println!("no"),
+}
+```
+
+This will print "no" because the `if y` applies when `x` is `4`, `5`, or `6`, not just when `x` is `6`.
+
+### @ Bindings
+
+The _at_ (`@`) operator lets us bind a value to a variable while why are also testing it in with a pattern:
+
+
+```
+struct User {
+    id: i32,
+}
+
+let msg = User { id: 5 };
+
+match msg {
+    User { id: my_id @ 3..=7 } => println!("Found an id in range: {}", my_id),
+    User { id: 10..=12 } => {
+        println!("Found an id in another range")
+    }
+    User { id } => println!("Found some other id: {}", id),
+}
+```
+
+Here we bind the `id` field to the variable `my_id` while we check if the `id` value is between 3 & 7. 
+
+It is perhaps more concise to just use match guards:
+
+```
+match msg {
+    User { id } if (3..=7).contains(&id) => println!("Found an id in range: {}", id),
+```
+
+### Match Ergonomics:
+
+A new RFC made things a lot cleaner. Matching on a reference used to require explict destructuring using `&` and `*`:
+
+```
+let x: &Option<_> = &Some(0);
+
+match x {
+    &Some(ref y) => { ... },
+    &None => { ... },
+}
+
+// or using `*`:
+
+match *x {
+    Some(ref x) => { ... },
+    None => { ... },
+}
+```
+
+With a new RFC, the above form still works, but now we also allow a simpler form:
+
+```
+let x: &Option<_> = &Some(0);
+
+match x {
+    Some(y) => { ... }, // `y` is a reference to `0`
+    None => { ... },
+}
+```
+
+The expression being matched is a reference (type &Option) but the patterns are not reference patterns (as in 1. above). This is where match ergonomics kick in: the rule says that when a reference is matched with a non-reference pattern, the bindings within that pattern bind by reference rather than by value (i.e. as if they were prefixed with ref).
+
+This also means that we only need to use `ref` and `ref mut` when trying to borrow owned data via destructuring. When trying to borrow from borrowed data via destructuring, the compiler will automatically create `ref` and `ref mut` where appropriate.
