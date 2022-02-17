@@ -34,41 +34,58 @@ fn print_coordinates(&(x, y): &(i32, i32)) {
     println!("current location: ({}, {})", x, y);
 }
 
-// Notice this doesn't work because `String` is not Copy, so this would try to
-// acquire ownership from a reference. we can remove the leading `&` to create
-// x and y as references via destructuring with match ergonomics
-// fn print_strings(&(x, y): &(String, String)) {
-//     println!("The two strings: ({}, {})", x, y);
-// }
-// A more detailed explanation can be found here:
-// https://stackoverflow.com/questions/56511328/how-does-rust-pattern-matching-determine-if-the-bound-variable-will-be-a-referen
+// ************* Match Ergonomics RFC Demonstration *******************
+// Notice the following signature doesn't work because `String` is not Copy, so this would try to
+// acquire ownership from a reference:
+//
+// fn print_strings2(&(x,y): &(String, String)) {
 
-// The following two lines describe the translation that occurs:
-// fn print_strings2((x,y): &(String, String)) {
+// To fix this we can remove the leading `&` to create
+// x and y as references via destructuring with match ergonomics:
+//
+// fn print_strings((x, y): &(String, String)) {
+//
+// A more detailed explanation can be found here:
+// https://stackoverflow.com/questions/56511328/how-does-rust-pattern-matching-determine-if-the-bound-variable-will-be-a-referen\
+// But what it expands to is this:
 fn print_strings2(&(ref x, ref y): &(String, String)) {
     println!("The two strings: ({}, {})", x, y);
 }
 
 fn match_in_closure_parms() {
-    let c = |&(x, y)| {
+    let f = |&(x, y)| {
         println!("current location: ({}, {})", x, y);
     };
 
-    c(&(3, 5));
+    f(&(3, 5));
+
+    // Doesn't work with non-Copy types
+    // let g = |&(x, y)| {
+    //     println!("Some Strings: ({}, {})", x, y);
+    // };
+
+    // g(&("Foo".to_string(), "Fuz".to_string()));
+
+    // We could leverage match ergonomics again, just saying:
+    let h = |(x, y): &(String, String)| {
+        println!("some Strings: ({}, {})", x, y);
+    };
+
+    h(&("Foo".to_string(), "Fuz".to_string()));
 }
 
 fn ranges() {
-    let r = 1..5;
+    let es = 1..5;
 
-    for rs in r {
-        println!("{}", rs);
+    for e in es {
+        println!("r[{}]: {}", e - 1, e);
     }
 
-    let e = 1..=5;
+    let is = 1..=5;
 
-    println!("es");
-    for es in e {
-        println!("{}", es);
+    println!("inclusives");
+    for i in is {
+        println!("i[{}]: {}", i - 1, i);
     }
 }
 
@@ -79,6 +96,7 @@ struct Point {
 }
 
 fn print_coordinates_again(p: &Point) {
+    // match ergonomics again
     let Point { x, y } = p;
     println!("I'm at {}, {}!", x, y);
 }
@@ -88,7 +106,7 @@ fn which_axis(p: &Point) {
         Point { x: 0, y: 0 } => println!("On both axis at ({},{})", p.x, p.y),
         Point { x, y: 0 } => println!("On the x axis at {}", x),
         Point { x: 0, y } => println!("On the y axis at {}", y),
-        Point { x, y } => println!("one neither axis!"),
+        Point { x: _, .. } => println!("On neither axis!"),
     }
 }
 
@@ -125,6 +143,7 @@ fn destructuring_references() {
         Point { x: 10, y: -3 },
     ];
 
+    // remove the '&' to see "match ergonomics" in action
     let sum_of_squares: i32 = points.iter().map(|&Point { x, y }| x * x + y * y).sum();
     println!("sum of squares: {}", sum_of_squares);
 
@@ -133,16 +152,16 @@ fn destructuring_references() {
     //     None => println!("no more points!"),
     // }
 
-    // let strings = vec![
-    //     Holder {
-    //         val: "foo".to_string(),
-    //     },
-    //     Holder {
-    //         val: "baz".to_string(),
-    //     },
-    // ];
-    //
-    // let sum_of_strings: usize = strings.iter().map(|&Holder { val }| val.len()).sum();
+    let _strings = vec![
+        Holder {
+            val: "foo".to_string(),
+        },
+        Holder {
+            val: "baz".to_string(),
+        },
+    ];
+
+    // let sum_of_strings: usize = _strings.iter().map(|&Holder { val }| val.len()).sum();
     // println!("sum of strings: {}", sum_of_strings);
 }
 
@@ -201,9 +220,12 @@ fn borrow_nested_data_that_is_borrowed() {
     let holder_ref = &holder;
 
     // Here we are basically copying an immutable reference.
-    // The `ref` is no longer necessary since we're destructuring a reference
+    // The `ref` is no longer necessary. Since we're destructuring a reference,
+    // match ergonomics kicks in
     match holder_ref {
-        StringHolder { val: Some(ref str) } => {
+        StringHolder {
+            val: Some(/*ref*/ str),
+        } => {
             println!("Borrowed borrowed data via destructuring: {}", str)
         }
         _ => (),
@@ -230,7 +252,12 @@ fn mutably_borrow_nested_data_that_is_owned() {
         _ => (),
     }
 
-    println!("holder: {:?}", holder);
+    println!("mutably borrow data via ref mut: {:?}", holder);
+
+    let holder_handle = holder.val.as_mut().unwrap();
+    *holder_handle = holder_handle.to_owned() + "fiz_buz";
+
+    println!("mutably borrow data via #as_mut: {:?}", holder);
 }
 
 fn mutably_borrow_nested_data_that_is_mutably_borrowed() {
@@ -240,27 +267,58 @@ fn mutably_borrow_nested_data_that_is_mutably_borrowed() {
     let holder_ref = &mut holder;
 
     // Here we are basically copying an immutable reference.
-    // The `ref mut` is no longer necessary since we're destructuring a reference
+    // The `ref mut` is no longer necessary. Since we're destructuring a reference,
+    // match ergonomics kicks in
     match holder_ref {
         StringHolder {
-            val: Some(ref mut str),
+            val: Some(/*ref mut*/ str),
         } => {
             *str = "foobar".to_string();
         }
         _ => (),
     }
+    println!(
+        "mutably borrow from a mutable borrow with destructuring: {:?}",
+        holder
+    );
 
-    println!("holder: {:?}", holder);
+    let holder_handle = holder.val.as_mut().unwrap();
+    // apparently this call to #to_owned() doesn't break the ownership rules
+    // because by the time the expression is, done evaluating, holder_handle
+    //  has a new value.
+    *holder_handle = holder_handle.to_owned() + "fiz_buz";
+
+    println!(
+        "mutably borrow from a mutable borrow with as_mut: {:?}",
+        holder
+    );
 }
 
+// `#as_str` requires ownership of the `String`, so we use `#take` to take ownership of the
+// `String` and temporarily replace it with `None` so we can call `#as_str` on `x` before
+// we mutate val. Note this doesn't work with #unwrap, which attempts to transfer ownership
+// of the same value
 fn practice_using_take_again() {
-    let mut robot_name = Some("borg".to_string());
+    let robot_name = &mut StringHolder {
+        val: Some("Borg".to_string()),
+    };
 
-    match robot_name.take() {
-        Some(x) => robot_name = Some(x + " blick"),
+    // 1st try won't work can't transfer ownership:
+    //robot_name.val = Some(robot_name.val.unwrap().as_str().to_string() + " blick");
+
+    // Here we use `#take` in chain:
+    robot_name.val = Some(robot_name.val.take().unwrap().as_str().to_string() + " Blick");
+
+    // #as_ref is probably better:
+    robot_name.val = Some(robot_name.val.as_ref().unwrap().as_str().to_string() + " Blick");
+
+    // take in destructuring
+    match robot_name.val.take() {
+        Some(x) => robot_name.val = Some(x.as_str().to_string() + " Blick"),
         None => (),
     }
 
+    // Borg Blick Blick Blick
     println!("robot_name: {:?}", robot_name);
 }
 
@@ -274,6 +332,24 @@ fn match_guards() {
         Some(x) => println!("x: {}", x),
         None => (),
     }
+
+    //let foo = Some("foo".to_string());
+
+    // We cannot transfer ownership (move) it a pattern guard:
+    // match foo {
+    //     Some(x) if x + "bar" == "foobar".to_string() => println!("got part of foobar"),
+    //     Some(x) => println!("string is not part of foobar"),
+    //     None => println!("got nothing"),
+    // }
+
+    //let foo = &mut Some("foo".to_string());
+
+    // We also cannot borrow as mutable in a pattern guard
+    // match foo {
+    //     Some(x) if x.as_bytes_mut() == [b'f', b'o', b'o', b'b', b'a'] => println!("got fooba"),
+    //     Some(x) => println!("string is not fooba"),
+    //     None => println!("got nothing"),
+    // }
 }
 
 fn at_bindings() {
@@ -314,3 +390,7 @@ fn main() {
 }
 
 fn takes_ownership<T>(x: T) {}
+
+fn takes_ownership_and_returns_something<T>(x: T) -> String {
+    "Nom".to_string()
+}

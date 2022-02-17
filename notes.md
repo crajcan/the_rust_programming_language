@@ -2795,7 +2795,7 @@ match x {
 
 This will match any `Some(val)` where `val` is not `50`, and bind `val` to the variable `y`, which is shadowed in the scope of the match. After the match expression ends, `y` is again `10`.
 
-#### Multiple Patterns
+#### Multiple Patterns in One Match Arm
 
 ```
 let x = 1;
@@ -2824,7 +2824,7 @@ match x {
 let x = 'c';
 
 match x {
-    'a'...'j' => println!("early ASCII letter"),
+    'a'..='j' => println!("early ASCII letter"),
     'k'..='z' => println!("later ASCII letter"),
     _ => println!("something else"),
 }
@@ -2848,7 +2848,7 @@ or if you want your new variable to match the field names of the struct:
 
 ```
 fn print_coordinates(p: Point) {
-    let Point{ x, y } = p;
+    let Point { x, y } = p;
     println!("I'm at {}, {}!", x, y);
 }
 ```
@@ -2859,10 +2859,12 @@ fn which_axis(p: &Point) {
         Point { x: 0, y: 0 } => println!("On both axis at ({},{})", p.x, p.y),
         Point { x, y: 0 } => println!("On the x axis at {}", x),
         Point { x: 0, y } => println!("On the y axis at {}", y),
-        Point { x, y } => println!("one neither axis!"),
+        Point { x, y: _ } => println!("On neither axis!"),
     }
 }
 ```
+Notice in the last one we explicitly said `y` can be anything without matching its value to any variable.
+
 
 ##### Enums
 
@@ -2919,6 +2921,7 @@ Notice when we try to use the same pattern from some_of_squares in
 Answer: it looks like it is possible:
 
 ```
+// This is match ergonomics again
 if let StringHolder { val: Some(s: &String) } = holder_ref {
     println!("capacity of string: {}", s.capacity());
 }
@@ -2927,7 +2930,7 @@ See `chapter_18/src/main.rs#borrow_nested_data_that_is_borrowed`.
 
 **Follow up**: So when are `ref` and `ref mut` used for in destructuring? Use them to destructure The `&StringHolder` and avoid using `as_ref` in `chapter_18/src/main.rs#borrow_nested_data_that_is_owned`
 
-It turns out we need to use `ref` when destructuring to get a reference into nested date of an _owned_ value. When the value is borrowed, we can get a reference into its nested data for free--we're just copying references.
+It turns out we need to use `ref` when destructuring to get a reference into nested date of an _owned_ value. When the value is borrowed, we can get a reference into its nested data by providing a non-reference pattern, because of _match ergonomics_.
 
 #### Ignoring Entire Values With _
 
@@ -3060,11 +3063,11 @@ error: `..` can only be used once per tuple pattern
 
 ### Creating References in Patterns with ref and ref mut
 
-#### Creating an immutable reference while restructuring.
+#### Creating an Immutable Reference While Destructuring.
 
 When we want to avoid a _partial move_ (taking ownership of a nested piece of data), we can create a reference to the nested data.
 
-When trying to create a reference into a nested data structure that is owned, we might have the inclination to destructure using `&x`, however, when used in destructuring patterns, `&` does not _create_ a reference, but actually matches an existing reference:
+When trying to create a reference into a nested data structure that is owned, we might have the inclination to destructure using `&x`, however, when used in destructuring patterns, `&` does not _create_ a reference, but actually matches an existing reference (this only really works with values that are copy):
 
 ```
 let robot_name = Some(String::from("Bors"));
@@ -3108,7 +3111,6 @@ println!("robot_name is: {:?}", robot_name);
 
 Similarily, we cannot use `&mut` while destructuring to create a mutable reference into nested mutable owned data. `&mut` can only be used to match existing mutable references.
 
-
 ```
 let mut robot_name = Some("borg".to_string());
 
@@ -3119,6 +3121,7 @@ match robot_name {
 
 println!("robot_name: {:?}", robot_name);
 ```
+
 Just like we saw above, this will not compile because `robot_name` is an `Option<String>`, not an `Option<&mut String>`:
 
 ```
@@ -3150,9 +3153,9 @@ match robot_name {
 println!("robot_name: {:?}", robot_name);
 ```
 
-**note** the only way to use `&` or `&mut` in a pattern to actually match a value is if the nested value you are trying to match implments Copy. Otherwise you are attempting to take ownership of a shared reference
+**note** the only way to use `&` or `&mut` in a pattern to actually match a value is if the nested value you are trying to match implements `Copy`. Otherwise you are attempting to take ownership of a shared reference
 
-**will compile**:
+**Will Compile**:
 
 ```
 let v = vec!["foo", "bar"];
@@ -3165,7 +3168,9 @@ match v.iter().next() {
 println!("v: {:?}", v);
 ```
 
-**won't compile**:
+`&str` implements `Copy`
+
+**Won't Compile**:
 
 ```
 let v = vec!["foo".to_string(), "bar".to_string()];
@@ -3177,6 +3182,8 @@ match v.iter().next() {
 
 println!("v: {:?}", v);
 ```
+
+`String` does not implement `Copy`
 
 ### Extra Conditionals in Match Guards
 
@@ -3221,10 +3228,54 @@ match x {
 
 This will print "no" because the `if y` applies when `x` is `4`, `5`, or `6`, not just when `x` is `6`.
 
+
+We cannot transfer ownership (move) it a match guard:
+
+```
+match foo {
+    Some(x) if x + "bar" == "foobar".to_string() => println!("got part of foobar"),
+    Some(x) => println!("string is not part of foobar"),
+    None => println!("got nothing"),
+}
+```
+
+This will result in an error:
+
+```
+error[E0507]: cannot move out of `x` in pattern guard
+   --> src/main.rs:339:20
+    |
+339 |         Some(x) if x + "bar" == "foobar".to_string() => println!("got part of foobar"),
+    |                    ^ move occurs because `x` has type `String`, which does not implement the `Copy` trait
+    |
+    = note: variables bound in patterns cannot be moved from until after the end of the pattern guard
+
+```
+
+Similarily if we try to borrow as mutable:
+
+```
+// We also cannot borrow as mutable in a pattern guard
+match foo {
+    Some(x) if x.as_bytes_mut() == [b'f', b'o', b'o', b'b', b'a'] => println!("got fooba"),
+    Some(x) => println!("string is not fooba"),
+    None => println!("got nothing"),
+}
+```
+
+```
+error[E0596]: cannot borrow `*x` as mutable, as it is immutable for the pattern guard
+   --> src/main.rs:349:20
+    |
+349 |         Some(x) if x.as_bytes_mut() == [b'f', b'o', b'o', b'b', b'a'] => println!("got fooba"),
+    |                    ^ cannot borrow as mutable
+    |
+    = note: variables bound in patterns are immutable until the end of the pattern guard
+```
+
 ### @ Bindings
 
-The _at_ (`@`) operator lets us bind a value to a variable while why are also testing it in with a pattern:
-
+The `@` (_at_) operator lets us bind a value to a variable while why are also testing it with a pattern:
 
 ```
 struct User {
@@ -3253,7 +3304,7 @@ match msg {
 
 ### Match Ergonomics:
 
-A new RFC made things a lot cleaner. Matching on a reference used to require explict destructuring using `&` and `*`:
+A new RFC made things a lot cleaner. Matching on a reference used to require explicit destructuring using `&` and `*`:
 
 ```
 let x: &Option<_> = &Some(0);
@@ -3282,6 +3333,17 @@ match x {
 }
 ```
 
-The expression being matched is a reference (type &Option) but the patterns are not reference patterns (as in 1. above). This is where match ergonomics kick in: the rule says that when a reference is matched with a non-reference pattern, the bindings within that pattern bind by reference rather than by value (i.e. as if they were prefixed with ref).
+The expression being matched is a reference (type &Option) but the patterns are not reference patterns (`ref`, `ref mut`). This is where match ergonomics kick in: the rule says that when a reference is matched with a non-reference pattern, the bindings within that pattern bind by reference rather than by value (i.e. as if they were prefixed with ref).
 
-This also means that we only need to use `ref` and `ref mut` when trying to borrow owned data via destructuring. When trying to borrow from borrowed data via destructuring, the compiler will automatically create `ref` and `ref mut` where appropriate.
+This also means that we only need to use `ref` and `ref mut` when trying to borrow owned data via destructuring. When trying to borrow from borrowed data via destructuring, the compiler will automatically add `ref` and `ref mut` behind the schenes where appropriate.
+
+The following functions in `chapter_18/src/main.rs` demonstrate when to use `ref` and `ref mut`, when they can be avoided, and when we need to use `.as_ref`.
+
+```
+borrow_nested_data_that_is_owned();
+borrow_nested_data_that_is_borrowed();
+mutably_borrow_nested_data_that_is_owned();
+mutably_borrow_nested_data_that_is_mutably_borrowed();
+``` 
+
+## Chapter 19 (Advanced Features)
