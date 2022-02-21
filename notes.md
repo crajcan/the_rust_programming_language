@@ -458,7 +458,7 @@ We would read this as, "Implement the ToString trait for any type that implement
 
 #### Combining the two
 
-Conditionally implment a trait for a generic type whenever the generic type's enclosed type implements some trait:
+Conditionally implement a trait for a generic type whenever the generic type's enclosed type implements some trait:
 
 ```
 impl<T: Display> Bark for Container<T>
@@ -573,6 +573,7 @@ Lifetimes on function or method parameters
 Lifetimes on return values
 
 #### The Compiler's 3 lifetime inference rules
+
 These three rules are applied to assign lifetimes to references. If the three rules are applied and the compiler still can't determine a lifetime, you must do so manually with annotations. If it can determine all the lifetimes, then they are _elided_
 
 1. Each parameter that is a reference gets it's own lifetime.
@@ -2306,7 +2307,7 @@ As stated above, since the _Mutex_ will return a _MutexGuard_ when we call `m.lo
 
 See examples `share_data_between_two_threads_with_mutexes` and `share_data_between_many_threads_with_mutexes` in `chapter_16/src/main.rs`.
 
-We can't use `move` a mutex into closures going to two differnent threads, this will result in a compiler error: 
+We can't use `move` to move a mutex into closures going to two differnent threads, this will result in a compiler error: 
 
 ```
 error[E0382]: use of moved value: `counter`
@@ -3347,3 +3348,829 @@ mutably_borrow_nested_data_that_is_mutably_borrowed();
 ``` 
 
 ## Chapter 19 (Advanced Features)
+
+### Unsafe Superpowers
+
+- Dereference a raw pointer
+- Call an unsafe function or method
+- Access or modify a mutable static variable
+- Implement an unsafe trait
+  
+`unsafe` does not turn off the borrow checker. 
+
+It's best to enclose `unsafe` code within an abstraction and provide a `safe` API.
+
+### Dereferencing a Raw Pointer
+
+Rust has two _raw pointer_ types, `*const T` and `*mut T`. 
+
+_Raw pointers_ have some capabilities that regular _references_ and _smart pointers_ do not:
+
+- Ignore the borrowing rules by having both immutable and mutable pointers, or multiple mutable pointers to the same location.
+- Aren't guaranteed to point to valid memory (during a pointer's lifetime, some other pointer could mutate or drop the value it points to)
+- Are allowed to be null
+- Don't implement any automatic cleanup (we need to call free presumably)
+
+Sounds a lot like C pointers...
+
+Creating raw pointers;
+
+```
+let mut num = 5;
+let r1 = &num as *const i32;
+let r2= *mut num as *mut i32;
+```
+
+here `as` is used to cast normal references into _raw pointers_.
+
+We can create a raw pointer to any address:
+
+```
+let address = 0x012345Usize;
+let r = address as *const i32;
+```
+
+**Challenge** use `Rc<T>` to create multiple owners of a piece of data, then try to mutate that data with a mutable reference
+
+### Creating a Safe Abstraction over Unsafe Code
+
+Suppose we want to implement a the function `#split_at_mut` which will create two mutable slice references to two segments of a given slice, given a split point:
+
+```
+let mut v = vec![1, 2, 3, 4, 5, 6];
+let r = &mut v[..];
+let (a, b) = split_at_mut(r, 3);
+
+assert_eq!(a, &mut [1, 2, 3]);
+assert_eq!(b, &mut [4, 5, 6]);
+```
+
+Trying to implement this in safe rust would look like this:
+
+```
+fn split_at_mut(slice: &mut [i32], mid: usize) -> (&mut [i32], &mut [i32]) {
+    assert!(mid <= slice.len());
+
+    (&mut slice[..mid], &mut slice[mid..])
+}
+```
+
+**Note** in the expression `(&mut slice[..mid], &mut slice[mid..])`, the `..` notation is inclusive on the lower bound and exclusive on the upper bound. If we call `slice[n..]` where n is equal to the length of the slice, we will get back nothing. If we call `slice[..n]` where n is equal to the length of the slice, we will get back the entire slice.
+
+This won't compile because we're trying to create two mutable references to the same value:
+
+```
+error[E0499]: cannot borrow `*slice` as mutable more than once at a time
+  --> src/main.rs:59:30
+   |
+56 | fn split_at_mut(slice: &mut [i32], mid: usize) -> (&mut [i32], &mut [i32]) {
+   |                        - let's call the lifetime of this reference `'1`
+...
+59 |     (&mut slice[..mid], &mut slice[mid..])
+   |     -------------------------^^^^^--------
+   |     |     |                  |
+   |     |     |                  second mutable borrow occurs here
+   |     |     first mutable borrow occurs here
+   |     returning this value requires that `*slice` is borrowed for `'1`
+```
+
+**Challenge** Figure out why we can't compare `&[T]` with `[T]`
+
+### Using `extern` Functions to Call External Code
+
+`extern`: A keyword for facilitating the creation of a _FFI_
+_Foreign Function Interface (FFI)_: A way for a programming language to define functions and enable a different (foreign) programming lanugage to call those functions.
+
+Functions declared with `extern` block sare alwasy considered `unsafe` since the Rust compiler has no way to check code from other languages.
+
+```
+extern "C" {
+    fn abs(input: i32) -> i32;
+}
+
+fn main() {
+    unsafe {
+        println!("Absolute value of -3 according to C: {}, abs(-3));
+    }
+}
+```
+
+Here, `extern "C"` specifies that we want to use the C _application binary interface (ABI)_, which defines how to call the function at the assembly level. The "C" _ABI_ is the most common and follows the C programming language's ABI.
+
+                                  /\ 
+                                 /__\
+                                  ||
+                                  || 
+                                  || 
+ **Challenge**: Actually use this || 
+
+### Calling Rust Functions From Other Languages
+
+**Challenge**: Actually use this:
+
+```
+#[no_mangle]
+pub extern "C" fn call_from_c() {
+    println!("Just called a rust fn from C");
+}
+```
+
+### Accessing or Modifying a Mutable Stack Variable
+
+```
+static HELLO_WORLD &str = "Hello, World!";
+
+fn main() {
+    println!("message is {}", HELLO_WORLD);
+}
+```
+
+Unlike constants which duplicate their memory every time they are used, immutable static variables have a fixed address.
+
+**Challenge** Prove this with an example ^^^
+
+Static variables can also be mutable:
+
+```
+static mut COUNTER: u32 = 0;
+
+fn add_to_count(inc: u32) {
+    unsafe {
+        COUNTER += inc;
+    }
+}
+
+fn mutate_static() {
+    add_to_count(3);
+
+    unsafe {
+        println!("COUNTER: {}", COUNTER);
+    }
+}
+```
+Any code that reads or writes to a mutable static must be in an unsafe block, because the compiler cannot guarantee there will not be a data race without a `Arc<Mutex<T>>` (remember the `Mutex<T>` locks to allow prevent data races and the `Arc<T>` allows for shared ownership across threads).
+
+### Implementing an Unsafe Trait.
+
+_`unsafe` trait_: One that the compiler can't verify due to some invariant
+
+```
+unsafe trait Foo {
+
+}
+
+unsafe impl Foo for i32 {
+
+}
+```
+
+`Sync` and `Send` are marker traits that the compiler implements automatically if our types are composed entirely of `Sync` or `Send` types. If we implement a type that contains a type that is not `Send` or `Sync` and we want to mark it `Send` or `Sync` we must use `unsafe` because the comiler cannot verify that the type can be safely sent across threads or accessed from multiple threads.
+
+### Advanced Lifetimes
+
+ - _Lifetime subtyping_: Eunsures that one lifetime outlives another lifetime. (Remember we usually specify one lifetime will be at least as long as another by labeling two varables with the same lifetime parameter).
+
+ - _Lifetime bounds_: Specifies a lifetime for a reference to a generic type.
+
+ - _Inference of trait object lifetimes_: Alllows the compiler to infer trait object lifetimes and when they need to be specified.
+
+#### Ensuring One Lifetime Outlives Another with Lifetime Subtyping
+
+Remember that _input lifetimes_ are lifetimes on function or method parameters. _Output lifetimes_ are lifetimes on return values.
+
+We have used lifetime parameters before when we had a return value that referenced a value referenced by an argument. 
+
+We were able to specify that the _output lifetime_ would be at least as long as the _input lifetime_ it was derived from.
+
+Now suppose we have a function that creates an owned value that references an input reference, then we call a method on this owned value to return a reference to the input reference.
+
+Since the input reference was encapsulated by a value that is about to go out of scope, the compiler cannot tell that the _output lifetime_ will be at least as long as the function parameter. Because it cannot tell that the _output lifetime_ was derived from the function paramter due to the layer of indirection (the owned value that is going out of scope).
+
+```
+struct Context<'a>(&'a str);
+
+struct Parser<'a> {
+    context: &'a Context<'a>,
+}
+
+impl<'a> Parser<'a> {
+    fn parse(&self) -> Result<(), &str> {
+        Err(&self.context.0[1..])
+    }
+}
+
+fn parse_context(c: Context) -> Result<(), &str> {
+    Parser { context: &c }.parse()
+}
+```
+
+In this example we create an owned value that holds a reference to the input parameter, and then later we use `#parse()` to a return a reference that was held by the input paramter
+
+Due to the indirection created by wrapping the input parameter in a local owned value, the compiler doesn't realize that we are returning a reference that was passed in by the owned input paramter:
+
+```
+error[E0515]: cannot return value referencing function parameter `c`
+   --> src/main.rs:215:5
+    |
+215 |     Parser { context: &c }.parse()
+    |     ^^^^^^^^^^^^^^^^^^--^^^^^^^^^^
+    |     |                 |
+    |     |                 `c` is borrowed here
+    |     returns a value referencing data owned by the current function
+
+error[E0515]: cannot return value referencing temporary value
+   --> src/main.rs:215:5
+    |
+215 |     Parser { context: &c }.parse()
+    |     ----------------------^^^^^^^^
+    |     |
+    |     returns a value referencing data owned by the current function
+    |     temporary value created here
+```
+
+
+Notice if we were to avoid encapsulating `c` in a `Parser`, the compiler would be fine with us returning a reference that was owned by the input paramter:
+
+```
+fn parse_context(c: Context) -> Result<(), &str> {
+    Err(&c.0[1..])
+}
+```
+
+We need to tell the compiler that the reference held by the input paramter, is not going to be dropped when the `Parser` is dropped. So we can try to specify that have different lifetimes by annotating `Parser`:
+
+```
+struct Parser<'c, 's> {
+    context: &'c Context<'s>,
+}
+
+impl<'c, 's> Parser<'c, 's> {
+    fn parse(&self) -> Result<(), &'s str> {
+        Err(&self.context.0[1..])
+    }
+}
+```
+
+And this appears to be enough for the compiler to understand that `c.context` will not be dropped when the local `Parser` instance gets dropped.
+
+Apparently _lifetime subtyping_ is not needed (atleast here), and this is an instance of the book being out of date. The way the book suggests fixing this is by specifing that `'s` will outlive `'c`:
+
+```
+struct Parser<'c, 's: 'c> {
+    context: &'c Context<'s>,
+}
+```
+
+**Challenge** determine why _lifetime subtyping_ is no longer needed here and if it is still a feature to be used elsewhere. Refer to `error[E0491]` (`rustc --explain E0491`)
+
+Possible answer: It looks like maybe it is due to NLL. The compiler can now tell that `c.context` isn't necessarily going to be dropped with the local `Parser` instance.
+
+### Lifetime Bounds on References to Generic Types
+
+_lifetime bounds_ are liftetime parameters that the compiler can use to verify that the references in generic types won't outlive the data they're referencing.
+
+Recall that when we defined a type that holds a reference to a type that also holds references, we needed to use lifetime parameters to specify that the references held by the value we are pointing to need to live at least as long as the reference in our type:
+
+```
+struct Foo<'a>('a str);
+
+struct FooHolder<'a> {
+    foo: &'a Foo<'a>
+}
+```
+
+Here we specified that `FooHolder.foo` will live at least as long as the string slcie held by the `Foo` it points to.
+
+But what if `FooHolder` held a reference to a generic type `T`?
+
+```
+struct FooHolder<'a> {
+    foo: &'a T 
+}
+```
+
+The compiler appears not to care about this either. Probably due to NLL, it can now tell that references in the generic type will live at least as long as the reference to the generic type. 
+
+The way the books recommends fixing this is as follows:
+
+```
+struct FoohHolder<'a, T: 'a>(&'a T)
+```
+
+This says that `T` can be any type, but if it contains references, they must live at least as long as 'a
+
+**Challenge** determine why _lifetime bounds_ is no longer needed here and explain the context that they still need to be used as explained by `error[E0309]` (`rustc --explain E0309`)
+
+### Inference of Trait Object Lifetimes
+
+We used `Trait Objects` before to create references to any type that implements a specific trait. This allowed us to use dynamic dispatch on the methods on that type.
+
+We did not cover the case where the type that implements the trait has a lifetime (reference) of its own.
+
+```
+trait Red {}
+
+struct Ball <'a> {
+    diameter: &'a i32
+}
+
+impl <'a> Red for Ball<'a> {}
+
+fn use_trait_object_with_lifetimes() {
+    let num = 5;
+
+    let obj: Box<dyn Red> = Box::new(Ball { diameter: &num});
+}
+```
+
+This compiles without any errors due to the compiler's rules for workign with lifetimes and trait objects:
+
+- The default lifetime of a trait object is `'static`
+- With `&'a Trait` or `&'a mut Trait`, the default lifetime of the trait object is `'a`.
+- With a single `T: 'a` clause, the default lifetime of the trait object is `'a`.
+- With multiple clauses like `T: 'a`, there is no default lifetime; we must be explicit.
+
+### Specifying Placeholder Types in Trait Definitions with Associated Types
+
+_Associated types_ connect a type placeholder with a trait such that the trait method definitions can use these placeholder types in their signatures.
+
+```
+pub trait Iterator {
+    type Item;
+
+    fn next(&mut self) -> Option<Self::Item>
+}
+```
+
+The trait implementor will specify the concrete type to be used as the associated type for a particular `impl` 
+
+### Default Generic Type Parameters and Operator Overloading
+
+When implementing a trait, we can specify default concrete types so that the implementor of a trait does not have to specify a concrete type if the default type works:
+
+```
+trait Add<RHS=Self> {
+    type Output;
+
+    fn add(self, rhs: RHS) -> Self::Output;
+}
+```
+
+here we have specified that the type of the `rhs` argument to our method will default to `Self`, the type the trait is implemented for. Now when someone comes along to implement the trait for their type, they can skip specifying a generic type paramter on the `impl` block:
+
+```
+impl Add for Point {
+    type Output = Point;
+
+    fn add(self, other: Pointer) -> Point {
+        x: self.x + other.y,
+        y: self.y + other.y
+    }
+}
+```
+
+Notice that because the trait definition for `Add` specifies that the `rhs` argument defaults to `Self`, we did not have to specify a generic type paramter to `impl` add for `Point`.
+
+If we wanted to impl add for our type to be added to some other type, we could override the default generic type paramter defined on `Add` by supplying our own:
+
+```
+impl Add<Meters> for Millimeters {
+    type Output = Millimeters;
+
+    fn add(self, other: Meters) -> Millimeters {
+        //snip
+    }
+}
+```
+
+Here we want to define what happens when we add a value stored in meters to a value stored in millimeters. Because `Add` is defined to default to adding two values of the same type, we overrode the generic type paramter for the `rhs` argument with the type `Meters`. Notice that in this we fill in the concrete type on the trait itself, not on the `impl` blcok or the type we are implementing the trait for.
+
+```
+impl<T> Bark for Container<T>
+```
+
+Usually in the past we specified that we were creating a generic impl for a generic type.
+
+There are two main use cases for default type parameters:
+
+- Extending a type without breaking existing code.
+- To allow customization in special cases most users won't need (like in the case of `Add`)
+
+An example of the first use case would be if you had the `Add` trait, and it only supported added two values of the same type. If you wanted to then support added two different types, you can avoid breaking existing code by using the default type paramter. This way you don't have to then update every other `impl` block for `Add`
+
+### Operator Overloading
+
+We've seen here that we can overload operations and traits listed in `std::ops` by implementing the traits associated with the operator. We can overload `+` by implementing `Add`.
+
+### Calling methods with the same name
+
+Nothing prevents you from implementing two traits for a type that use the same method name, or implementing a method directly on a trait that has the same name as some trait method.
+
+```
+trait Pilot {
+    fn fly(&self);
+}
+
+trait Wizard {
+    fn fly(&self);
+}
+
+struct Human;
+
+impl Pilot for Human {
+    fn fly(&self) {
+        println!("This is your captain speaking);
+    }
+}
+
+impl Wizard for Human {
+    fn fly(&self) {
+        ptinln!("Up");
+    }
+}
+
+impl Human {
+    fn fly(&self) {
+        println!("*waving arms furiously*");
+    }
+}
+```
+
+The compiler will default to calling the method defined directly on the type. This means `person.fly()` will call the method from the `impl Human` block. To call the methods from the trait implementations, we need to call `Pilot::fly(&person);` and `Wizard::fly(&person);`. Using the more explicit syntax allows us to call methods from two different trait implementations for the same type.
+
+#### Two Traits, One Type
+
+What if we have two types that implement the same trait?
+
+If we are using methods on instances of those types, the compiler can figure out what method to call because they take a `self` paramter. If we are trying to use associated methods from those two trait implementations, and both types are in the same scope, we need to use _fully qualified syntax_
+
+```
+trait Animal {
+    fn baby_name() -> String;
+}
+
+struct Dog;
+
+impl Dog {
+    fn baby_name() -> String {
+        String::from("Spot")
+    }
+}
+
+impl Animal for Dog {
+    fn baby_name() -> String {
+        String::from("Puppy")
+    }
+}
+```
+
+**Challenge**: Figure out how to resolve ambiguity when two types implement the same trait 
+
+Answer: This is actually unambiguous:
+
+```
+Dog::baby_name();
+Cat::baby_name();
+```
+
+### Using Supertraits to Require One Trait's Functionality Within Another Trait
+
+Suppose we want to define a trait that can only be implemented by types that define another trait.
+
+Remember previously we had defined trait implementations for any type that implements some other type:
+
+```
+impl<T:Display> ToString for T {
+}
+```
+
+This is similar but more strict, in this case we are defining the trait in such a way that _only_ types that implement some other _supertrait_ can implement the _dependent trait_:
+
+```
+use std::fmt;
+
+trait OutlinePrint: fmt::Display {
+    fn outline_print(&self) {
+        let output = self.to_string();
+        let len = output.len();
+        println!("{}", "*".repeat(len + 4));
+        println!("*{}*", " ".repeat(len + 2));
+        println!("* {} *", output);
+        println!("*{}*", " ".repeat(len + 2));
+        println!("{}", "*".repeat(len + 4));
+    }
+}
+```
+
+See the example usage in `chapter_19/src/main.rs#use_supertraits`.
+
+*Note*: When we have a _dependent trait_ that requires a _super trait_, but our type does not implement the _super trait_ for all generic enclosed types, we can still implement the _super trait_ for all enclosed types that impelement the _super trait_, and then implement the _dependent type_ only when our _enclosed type_ implements the supertrait:
+
+```
+impl<T: fmt::Display> fmt::Display for Point<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+impl<T: fmt::Display> OutlinePrint for Point<T> {}
+```
+
+Meaning, when the _depenedent trait_ says "you have to be able to do X", and our type can't always do "X" because of its _enclosed types_, we can still use the _dependent trait_ on our type in the cases where our _enclosed types_ can do "X".
+
+This is clever, lol.
+
+### Using the NewType Pattern to Implement External Traits on External Types
+
+_orphan rule_: we can implement a trait on a type only if either the trait or the type are local to our crate.
+
+_newtype pattern_: creating a new wrapper tuple struct type to enclose an external type just to implement the trait for the wrapper type.
+
+Both `Display` and `Vec<T>` are external types in the context of our crate.
+
+```
+use std::fmt;
+
+struct Wrapper(Vec<string>);
+
+impl fmt::Display for Wrapper {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[{}]", self.0.join(", "))
+    }
+}
+
+fn main() {
+    let w = Wrapper(vec![String::from("hello"), String::from("world")]);
+    println!("w = {}", w);
+}
+```
+
+Notice this only works in this case because the `Vec<T>` is specified to be a `Vec<String>`, and `String` implements `Display`.
+
+Unfortuneately, the _newtype_ would not have all the methods of the value it's holding. We would have to reimplement them all manually on the wrapper type by deferring to `self.0`. We could give the wrapper type all the methods of the inner type by implementing `Deref` on the wrapper type.
+
+### Using the NewType Pattern for Type Safety and Abstraction
+
+Newtypes are useful for carrying the units of a value:
+
+```
+struct Millimeters(i32);
+struct Meters(i32);
+```
+Newtypes are also useful for abstracting away some implementation details of a type.
+
+```
+struct People(Hashmap<i32, String>);
+```
+
+If we keep the inner values private, we can achieve _encapsulation_: to keep the implementation details of our interface hidden from the users of our interface.
+
+### Creating Type Synonyms with Type Aliases
+
+```
+type Kilometers = i32;
+```
+
+This declaration defines `Kilometers` to be the same type as `i32`. We can use `Kilometers` anywhere we could use `i32`
+
+We do not get the type-checking benefits that we get from the newtype pattern, that is, if we have:
+
+```
+type Kilometers = i32;
+type Milometers = i32;
+```
+
+The compiler cannot protect us from passing `Milometers` to a function that is expecting `Kilometers` and vice-versa.
+
+**Challenge**: redo the range_sum_bst leetcode challenge using a newtype and implementing `Deref`.
+
+**Aside**: Creating a type that stores a closure:
+
+```
+type Thunk = Box<Fn() + Send + 'static>;
+
+let f: Thunk = Box::new(|| println!("hi"));
+```
+
+We can use aliases to reduce repetition in type declarations:
+
+For example, in `std::io`:
+
+```
+type Result<T> = Result<T, std::io::Error>;
+```
+
+Since many methods in `std::io::Write` and other `struct`s in `std::io` always return `Result<T, std::io::Error>`, we can save some code by just having them return `Result<T>` which will expand to the type it aliases when compiled. We can also still use special syntax like the `?` operator since this is just an alias.
+
+### The Never Type that Never Returns
+
+Rust has a special type called `!` that's known as the _empty type_ because it hasno values. Rust refers to it as the _never type_ because it stands in place of the return type on functions that will never return.
+
+```
+fn bar() -> ! {
+    // --snip--
+}
+```
+
+The function `#bar` will never return, this is referred to as a _diverging function_.
+
+```
+let guess: u32 = match guess.trim().parse() {
+    Ok(num) => num,
+    Err(_) => continue,
+}
+```
+
+Here, `continue` is a value of type `!`. Expressions of type `!` can be coerced into any other type.
+
+Additionally, the `panic!` macro has type `!`. This allows us to use `panic!` as the return of a `match` arm
+
+```
+impl<T> Option<T> {
+    pub fn unwrap(self) -> T {
+        match self {
+            Some(val) => val,
+            None => panic!("called `Option::unwrap()` on a `None` value"),
+        }
+    }
+}
+```
+
+In the case of a neverending `loop`, `!` is the type of the expression:
+
+```
+println!("forever ");
+
+loop {
+    println!("and ever ");
+}
+```
+
+_rust-analyzer_ will fill in the type annotation:;
+
+```
+let foo: ! = loop {
+    println!("and ever ");
+}
+```
+
+### Dynamically Sized Types and the Sized Trait
+
+_dynamically sized types_, _DSTs_, or _unsized types_ let us write code using values whose size cannot be known at compile time.
+
+`str` is a _DST_, because we can't know how long the `str` is until runtime.
+
+```
+let s1: str = "Hello there!";
+let s2: str = "How's it going?";
+```
+
+This can't compile because the compiler needs to know the size of a value at compile time, and all values of a given size must have the same type. Since `str`s of different length woudl need different amounts of storage, it is not possible to create a variable holding a _DST_.
+
+The answer is to use `&str`. The slice data structur stores the starting position and length of the slice.
+
+While `&T` is a single value that stores the starting position of a `T`, `&str` is _two_ values, the address and its length. Therefore `&str` has a size twice that of a `usize`. 
+
+We can do this for any _DST_, we can put it behind pointer that knows the location and size of the dynamic information.
+
+`Box<str>` or `Rc<str>` would work. We've also done this with trait objects, like `Box<Display>` or `&Display`.
+
+_Every *trait* is a *dynamically sized type* we can refer to by useing the name of the trait._
+
+Rust uses the `Sized` trait to specify that a type's size is known at compile time. The trait is automatically derived for all types who's size is known at compile time.
+
+Additionally, the compiler implicitly adds a bound on `Sized` to every generic function.
+
+```
+fn generic<T>(t: T) {
+    // --snip--
+}
+```
+
+becomes:
+
+```
+fn generic<T: Sized>(t: T) {
+    // --snip--
+}
+```
+
+Generic functions by default only work on types that have a size known at compile time. The restriction can be relaxed by with the following syntax:
+
+```
+fn generic<T: ?Sized>(t: &T) {
+    // --snip--
+}
+```
+
+This means "`T` can be size or not". This `?` syntax is only available for `Sized`. Also not the type parameter from `t` changed from `T` to `&T`. We can only refer to `T` via a pointer if it is not `Sized`.
+
+### Advanced Functions and Pointers
+
+#### Function Pointers
+
+We can pass regular functions as values just as we would closures. Functions coerce to the type `fn` (not `Fn`). `fn` is referred to as the _function pointer_ type.
+
+```
+fn add_one(x: i32) -> i32 {
+    x + 1
+}
+
+fn do_twice(f: fn(i32) -> i32, arg: i32) -> i32 {
+    f(arg) + f(arg)
+}
+
+fn main() {
+    let anwser = do_twice(add_one, 5);
+    println!("The answer is {}", answer);
+}
+```
+
+We can also pass a closure in pace of a `fn`:
+
+```
+let next_answer = do_twice(|x| x + 2, 5);
+println!("The next answer is {}", next_answer);
+```
+
+However if we try to pass a closure that captures a variable: 
+
+```
+let foo = 24;
+let last_answer = do_twice(|x| x + foo, 5);
+println!("The next answer is {}", last_answer);
+```
+
+We get an error:
+
+```
+error[E0308]: mismatched types
+   --> src/main.rs:394:32
+    |
+394 |     let last_answer = do_twice(|x| x + foo, 5);
+    |                                ^^^^^^^^^^^ expected fn pointer, found closure
+    |
+    = note: expected fn pointer `fn(i32) -> i32`
+                  found closure `[closure@src/main.rs:394:32: 394:43]`
+note: closures can only be coerced to `fn` types if they do not capture any variables
+   --> src/main.rs:394:40
+    |
+394 |     let last_answer = do_twice(|x| x + foo, 5);
+    |                                        ^^^ `foo` captured here
+```
+
+If we try to pass a function to a function that is expecting a closure parameter, that will work just fine. Since functions never capture any variables from their environment, they will always satisfy `FnOnce`, `FnMut`, and `Fn`. see `chapter_19/src/main.rs#pass_a_function` for examples.
+
+It is usually benficial to define functions to accept generic types with one of the closure traits. That way you can be more flexible and accept functions and closures that fit the trait bounds. If you were working with external code, such as C, where there are no closures, you would want to only accept an `fn`.
+
+#### Returning Closures
+
+Closures are represented by traits, which means you can't return closures directly. Usually if you wanted to return a trait you could instead use the concrete type that implements the trait as the return value. With closures, you can't do this because closures don't have a concrete type that is returnable.
+
+If we try to return a closure with the trait bounds as the return type: 
+
+```
+fn returns_closure() -> Fn(i32) -> i32 {
+    |x| x + 1
+}
+```
+
+We get a multiple errors:
+
+```
+error[E0782]: trait objects must include the `dyn` keyword
+   --> src/main.rs:406:25
+    |
+406 | fn returns_closure() -> Fn(i32) -> i32 {
+    |                         ^^^^^^^^^^^^^^
+    |
+help: add `dyn` keyword before this trait
+    |
+406 | fn returns_closure() -> dyn Fn(i32) -> i32 {
+    |                         +++
+
+error[E0746]: return type cannot have an unboxed trait object
+   --> src/main.rs:406:25
+    |
+406 | fn returns_closure() -> Fn(i32) -> i32 {
+    |                         ^^^^^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = note: for information on `impl Trait`, see <https://doc.rust-lang.org/book/ch10-02-traits.html#returning-types-that-implement-traits>
+help: use `impl Fn(i32) -> i32` as the return type, as all return paths are of type `[closure@src/main.rs:407:5: 407:14]`, which implements `Fn(i32) -> i32`
+    |
+406 | fn returns_closure() -> impl Fn(i32) -> i32 {
+```
+
+The answer is to `Box` the closure to create a trait object:
+
+```
+fn returns_closure() -> Box<Fn(i32) -> i32> {
+    Box::new(|x| x + 1)
+} 
+
+fn main() {
+  call_closure(returns_closure());
+}
+```
+
+Notice that the Box will be `deref'd` automatically.
