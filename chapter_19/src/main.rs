@@ -1,4 +1,5 @@
 use core::slice;
+use std::rc::Rc;
 
 // this will segfault usually
 fn arbitrary_memory() {
@@ -10,6 +11,17 @@ fn arbitrary_memory() {
             println!("r3 is: {}", *r);
         }
     */
+}
+
+fn rc_challenge() {
+    let mut val = "string".to_string();
+
+    let a = Rc::new(val);
+    let b = Rc::clone(&a);
+
+    // borrow after move
+    // assert_eq!(val, "foobar".to_string());
+    assert_eq!(*a, "string".to_string());
 }
 
 fn mess_with_addresses() {
@@ -146,7 +158,19 @@ fn compare_slices() {
     assert_eq!(vec![1, 2, 3, 4], &[1, 2, 3, 4]);
 
     // can't do this...why?
-    //assert_eq!([1, 2, 3, 4], &[1, 2, 3, 4]);
+    // assert_eq!([1, 2, 3, 4], &[1, 2, 3, 4]);
+
+    // Answer: deref on Vec<T> returns &[T], so deref coercion will call
+    // *(vec![1,2,3,4].deref())
+    // which becomes:
+    // *(&[T])
+    // *&[T]
+    // [T]
+
+    // Remember that _deref coercion_ only works when the passed in argument is a
+    // reference toa type that implements `Deref` or a type that implements `Deref`. This is to avoid
+    // implicitly creating references. So we can convert Vec<T> to &[T], or even [T], but it will not
+    // convert &[T] to [T] because neither &[T] nor [T] implement Deref.
 }
 
 extern "C" {
@@ -159,25 +183,28 @@ fn calling_c() {
     }
 }
 
+static HELLO_WORLD: &str = "Hello, World!";
+
+fn use_static() {
+    println!("message is: {}", HELLO_WORLD);
+
+    println!("address of HELLO_WORLD: {:p}", HELLO_WORLD);
+    println!("address of HELLO_WORLD: {:p}", HELLO_WORLD);
+}
+
 fn make_const() -> &'static str {
     const foo: &str = "foobar";
 
     foo
 }
 
-static HELLO_WORLD: &str = "Hello, World!";
-
-fn use_static() {
-    println!("message: is {}", HELLO_WORLD);
-
-    const foobar: &str = "foobar";
-
-    println!("address of HELLO_WORLD: {:p}", HELLO_WORLD);
-    println!("address of HELLO_WORLD: {:p}", HELLO_WORLD);
+fn use_const() {
+    let c = make_const();
+    println!("meessage is: {}", c);
 
     //foobar is supposed to change addresses or something but can't make it happen
-    println!("address of foobar: {:p}", make_const());
-    println!("address of foobar: {:p}", make_const());
+    println!("address of foobar: {:p}", c);
+    println!("address of foobar: {:p}", c);
 }
 
 static mut COUNTER: u32 = 0;
@@ -201,7 +228,10 @@ struct Context<'a>(&'a str);
 // Here we say that 2 distinct lifetimes are linked,
 // 's lives at least as long as 'c, therefore:
 // The string slice held by the Context the lives at least as long as the reference to it.
-struct Parser<'c, 's: 'c> {
+// struct Parser<'c, 's: 'c> {
+
+// It's apparently enough now just to tell the compiler about the two different lifetimes:
+struct Parser<'c, 's> {
     context: &'c Context<'s>,
 }
 
@@ -329,8 +359,10 @@ fn use_supertraits() {
     p.outline_print();
 }
 
+// Implemet OutlinePrint for Point<T> when T implements Display
 // impl<T: fmt::Display> OutlinePrint for Point<T> {}
 
+// impl Display for Point<T> whenever T implements Display
 // impl<T: fmt::Display> fmt::Display for Point<T> {
 //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 //         write!(f, "({}, {})", self.x, self.y)
@@ -366,83 +398,12 @@ fn use_an_fnonce_closure(mut f: impl FnMut() -> ()) {
     f();
 }
 
-fn pass_a_closure() {
+fn closure_traits_review() {
     let f = || println!("foobar");
 
     use_a_closure(f);
     use_an_fnmut_closure(f);
     use_an_fnonce_closure(f);
-}
-
-fn add_one(x: i32) -> i32 {
-    x + 1
-}
-
-fn do_twice(f: fn(i32) -> i32, arg: i32) -> i32 {
-    f(arg) + f(arg)
-}
-
-fn regular_function() {
-    println!("I'm a fn() -> ()");
-}
-
-fn pass_a_function() {
-    let answer = do_twice(add_one, 5);
-    println!("The answer is {}", answer);
-
-    let next_answer = do_twice(|x| x + 2, 5);
-    println!("The next answer is {}", next_answer);
-
-    // closures can only be coerced to `fn` types if they do not capture any variables.
-    // let foo = 24;
-    // let last_answer = do_twice(|x| x + foo, 5);
-    // println!("The next answer is {}", last_answer);
-
-    use_a_closure(regular_function);
-    use_an_fnmut_closure(regular_function);
-    use_an_fnonce_closure(regular_function);
-
-    // we can create a closure in one function then pass it to another that expects a closure
-    let result_from_returned_closure = use_returned(returns_closure());
-    println!(
-        "The result_from_returned_closure is: {}",
-        result_from_returned_closure
-    );
-
-    // if we try to create a closure in one function and pass it to a function expecting "fn"
-    // let closure_when_needed_fn = do_twice(returns_closure(), 5);
-}
-
-fn use_returned<T: Fn(i32) -> i32>(f: T) -> i32 {
-    f(1)
-}
-
-fn returns_closure() -> Box<dyn Fn(i32) -> i32> {
-    Box::new(|x| x + 1)
-}
-
-fn main() {
-    arbitrary_memory();
-    mess_with_addresses();
-    use_raw_pointers_to_break_ownership_rules();
-    use_an_unsafe_function();
-    unsafe_behind_interface();
-    play_with_slices();
-    play_with_mutable_slices();
-    compare_slices();
-    calling_c();
-    simpler_nll_example();
-    use_static();
-    mutate_static();
-    parse_context(Context("foobar"));
-    use_trait_object_with_lifetimes();
-    use_method_disambiguation();
-    use_fully_qualified_syntax();
-    use_supertraits();
-    use_newtype_wrapper();
-    pass_a_closure();
-    pass_a_function();
-    excepting_closure_is_more_flexible();
 }
 
 fn call_fn(f: fn() -> ()) {
@@ -461,12 +422,80 @@ fn create_closure() -> Box<dyn Fn() -> ()> {
     Box::new(|| println!("Used programmatically created closure!"))
 }
 
-fn accepting_closure_is_more_flexible() {
+fn use_function_pointers_or_closures() {
     call_fn(hardcoded_fn);
     call_fn(|| println!("Used hardcoded closure"));
 
     call_closure(create_closure());
     call_closure(|| println!("Used hardcoded closure"));
     call_closure(hardcoded_fn);
+
     // call_fn(create_closure());
+}
+
+trait Add<RHS = Self> {
+    type Output;
+
+    fn add(self, rhs: RHS) -> Self::Output;
+}
+
+impl Add for Point {
+    type Output = Point;
+
+    fn add(self, other: Point) -> Point {
+        Point {
+            x: self.x + other.y,
+            y: self.y + other.y,
+        }
+    }
+}
+
+struct Millimeters(i32);
+struct Meters(i32);
+
+impl Add<Meters> for Millimeters {
+    type Output = Millimeters;
+
+    fn add(self, rhs: Meters) -> Millimeters {
+        Millimeters(self.0 + (rhs.0 * 1000))
+    }
+}
+
+impl Point {
+    fn x_value(&self) -> i32 {
+        self.x
+    }
+}
+
+fn use_x_value() {
+    let p = Point { x: 42, y: 0 };
+
+    println!("p.x_value(): {}", p.x_value());
+    println!("Point::x_value(p): {}", Point::x_value(&p));
+}
+
+fn main() {
+    arbitrary_memory();
+    rc_challenge();
+    mess_with_addresses();
+    use_raw_pointers_to_break_ownership_rules();
+    use_an_unsafe_function();
+    unsafe_behind_interface();
+    play_with_slices();
+    play_with_mutable_slices();
+    compare_slices();
+    calling_c();
+    simpler_nll_example();
+    use_static();
+    use_const();
+    mutate_static();
+    parse_context(Context("foobar"));
+    use_trait_object_with_lifetimes();
+    use_method_disambiguation();
+    use_fully_qualified_syntax();
+    use_supertraits();
+    use_newtype_wrapper();
+    closure_traits_review();
+    use_function_pointers_or_closures();
+    use_x_value();
 }
