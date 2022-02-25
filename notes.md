@@ -2512,7 +2512,7 @@ Only _object-safe_ traits can be made into trait objects. A trait is _object-saf
 - the return type isn't Self
 - There are no generic type parameters
 
-Once you have created a _trait object_, the runnign program no longer knows the concrete type that's implementing that trait.
+Once you have created a _trait object_, the running program no longer knows the concrete type that's implementing that trait.
 
 trait objects do not remember the concrete type of the values that they hold. So you wouldn't be able to call a trait method that returns `Self` on a trait object, because it would not know what type to return. Similarily, a trait method with a generic type parameter could not be called by a trait object, because it would not know what concrete type to fill in.
 
@@ -4228,4 +4228,463 @@ fn main() {
 ```
 
 Notice that the Box will be `deref'd` automatically.
+
+## Chapter 20 (Final Project: Building a Multithreaded Web Server)
+
+### Building a Single Threaded Web Server
+
+#### Listening for a Connection
+
+_Hypertext Transfer Protocol_(HTTP), and _Transmission Control Protocol_(TCP). Both are _request-response_ protocols. The client initiates a request and a server listens and responds. TCP describes the details fo how infomration gets from one server to another. HTTP defines the contents of the requests and responses. HTTP doesn't require TCP but it is almost always used with TCP.
+
+```
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+
+        println!("Connection established!");
+    }
+```
+
+`TcpListener.bind` creates a new instance of `TcpListener`. `listener.incoming` returns an iterator of `Result<TcpStream, Error>`s. A `TcpStream` reperesnets an open connection between the client and the server, ie. the entire request response cycle where the client connects to the server, the server generates a response and closes the connection. `TcpStream` will both read from itself to see what the client sent and allow us to write a response to it. 
+
+Note that we are iterating over connection attempts (`Result<TcpStream, Error>`) not actual connections, so we could receive errors if connections are not successful due to OS conditions.
+
+When `stream` goes out of scope at the end of the loop, the implementation of `drop` on `TcpStream` closes the connection.
+
+#### Reading the Request
+
+```
+fn handle_connection(mut stream: TcpStream) {
+    let mut buffer = [0; 512];
+
+    stream.read(&mut buffer).unwrap();
+
+    println!("Request: {}", String::from_utf16_lossy(&buffer[..]));
+}
+```
+
+`stream` is mutable here because the `TcpStream` type holds a pointer to the request data we can read from. To allow us to read the request data in segments, `TcpStream` may mutate this pointer.
+
+`String::from_utf16_lossy` creates a `String` from a `&[u8]`. The `lossy` part means that if it encounters an invalid UTF-8 sequence, it will replace the invalid sequence with `�` (the U+FFFD replacement character).
+
+#### A Closer Look at an HTTP Request
+
+```
+Request: GET / HTTP/1.1
+Host: localhost:7878
+Connection: keep-alive
+Cache-Control: max-age=0
+sec-ch-ua: " Not;A Brand";v="99", "Google Chrome";v="97", "Chromium";v="97"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "macOS"
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange
+```
+
+The first line is the _request line_, which indicates the request _method_, followed by the _Uniform Resource Identifier_ (URI). The URI is followed by the HTTP version, and finally a _CRLF_ sequence. A _CRLF_ is a _carriage return_ and _line feed_ sequence, `\r\n`. The _CRLF_ sequence separates the request line from the rest of the request data.
+
+The remaining lines in this request are all headers.
+
+#### Writing a Response
+
+Responses have the following format:
+
+```
+HTTP-Version Status-Code Reason-Phrase CRLF
+headers CRLF
+message-body
+```
+
+The first line is a _status line_ which contains the HTTP version, used in the response, a numeric status code, and a reason phrase that provdides a text description of the status code.
+
+Following the status line is the headers, and finally the body of the response.
+
+```
+    let response = "HTTP/1.1 200 OK\r\n\r\n";
+
+    stream.write(response.as_bytes()).unwrap();
+    stream.flush().unwrap();
+```
+
+`stream.flush()` will prevent the program from continuing utnil all the bytes are written to the connection. `TcpStream` contains an internal buffer to minimize calls to the underlying operating system.
+
+
+#### Validating the Request and Selectively Responding
+
+```
+    let slash = b"GET / HTTP/1.1\r\n";
+
+    if buffer.starts_with(slash) {
+        //create response and write to stream
+```
+
+Here, because `buffer` is an array of raw bytes, we will compare it to a _byte string_ we created using the `b""` _byte_ string syntax.
+
+### Turning our Single-Threaded Server into a Multi-threaded server
+
+#### Improving Throughput with a Thread Pool
+
+A _threadpool_ is a group of spawned threads that are waiting and ready to handle a task. When the program receives a new task, it assigns one of the threads in the pool to process the task.
+
+Our _threadpool_ will be implemented by a with a request queue. The pool will maintain a queue of requests, each thread will dequeue a reqest, handle it, then ask the queue for another request.
+
+**Big Challenge**: Instead of using a _threadpool_, implement the webserver with a _fork/join_ model, and a _async I/O_ model.
+
+#### Compiler Driven Development
+
+We're going to use an outside-in approach with _compiler driven development_ to create and make use of a `Threadpool` type.
+
+```
+fn main() {
+    //--snip--
+
+    let pool = ThreadPool::new(4);
+
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+
+        pool.execute(|| handle_connection(stream));
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+     //--snip--
+}
+```
+
+**DELETE** This is where I'm going to start listing the steps in our workflow and describing how they link together like I did in chapter 12. 
+
+After creating a `Threadpool` struct with a naive `new` associated method, the compiler tells us that `#execute` is not defined on `Threadpool`.
+
+Before we can define `#exectute`, we need to decide what the signature will look like. We know we're planning to use it to pass a closure to `#spawn` that will call `handle_connection`. So it should accept a closure. The closure that `#spawn` accepts captures, then consumes (transfers ownership) of the `stream` to `handle_connection`, so we know `#execute` should take an `FnOnce` closure. 
+
+We also know that `#execute` will be responsible for transferring the closure from our main thread to a thread waiting in the pool, so the closure argument to `#execute` should be `Send` as well.
+
+Finally we do not know how long the thread will take to execute, (we can't relate the lifetime of the closure to any other references that are in scope) so we will give the closure the `'static` lifetime.
+
+With these obeservations in consideration, we come up with a type signature for `#execute`:
+
+```
+impl ThreadPool {
+    pub fn execute<F>(&self, f: F)
+        where
+            F: FnOnce() + Send + 'static 
+    {
+        //empty body
+    }
+}
+```
+
+If we compile this now we will get warnings for the unused variable `size` in `#new` and `f` in `#execute<F>`. Since the `size` value in `#new` is a `usize`, but we don't want zero threads, we need to validate that `size` is positive.
+
+```
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0);
+
+        ThreadPool
+    }
+```
+
+ After we ensure that our `Threadpool` user is requesting a valid number of threads, we need to create the threads and store them somewhere so we can reference them when we're ready. `spawn` typically returns a `JoinHandle<T>` to allow us to reference a thread later, so we know we're going to need to store a collection of `JoinHandle<T>`s somewhere.
+
+```
+pub struct ThreadPool {
+    threads: Vec<thread::JoinHandle<()>>,
+}
+
+impl ThreadPool {
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0);
+
+        let mut threads = Vec::with_capacity(size);
+
+        for _ in 0..size {
+            // create some threads and store their handles
+        }
+
+        ThreadPool {
+            threads
+        }
+    }
+}
+```
+
+Previously we have used `#spawn` create a thread and have it run a closure immediately. In the `for` loop in new, we would like to create threads and have them wait for `#execute` to activate them. The standard library provides no way to create a thread without it starting execution immediately, so we will have to implement it. We will create a new struct to represent waiting threads called `Worker`.
+
+In `Worker::#new` we create a Worker that stores an `id` and a `thread` with an empty closure, just because `spawn` requires we give it _some_ closure.
+
+**Question**: Does a thread with an empty closure not execute?
+
+Now we will make the `Worker` structs fetch code to run from a queue held in the `ThreadPool` and send that code to its `thread` to run. Since we know we need to create a queue that other threads can read from, we should realize pretty quickly that we can implement this behavior with channels.
+
+We will create a channel that the `ThreadPool` can send code (closures) down, and the `Worker`s can listen on. When a `Worker` receives a closure on the channel it executes it. /
+
+First we create a channel and let the `ThreadPool` hold the sending end:
+
+```
+    let (sender, receiver) = mpsc::channel();
+
+    // --snip--
+
+    ThreadPool {
+        workers,
+        sender
+    }
+```
+
+Then we want to send the receiving end of the channel to each worker.
+
+```
+   for i in 0..sizer {
+       workers.push(Worker::new(id, receiver));
+   }
+```
+
+```
+impl Worker {
+    fn new(id: usize, receiver: mpsc::Reciver<Job>) -> Worker {
+        let thread = thread::spawn(|| {
+            receiver;
+        })
+    }
+}
+```
+
+The next problem that arises is that when we are creating workers with `Worker.new()`, we are trying to use a moved value every time we pass `receiver`. The problem here is that we are trying to use `mpsc` (multiple producer, singler consumer) channels, but we are working with a _single producer, multiple consumer_ problem. The answer here is to share a single _receiver_ (queue) across all the workers. 
+
+We are going to have to share a queue among all the workers. Additionally, taking a `Job` off the queue will require mutating the queue.
+
+Since we know we need to share ownership of some data across multiple threads, we should be reaching for a tool to provide multiple ownership across threads, and another to allow for interior mutablility across threads. We should realize that `Arc<Mutex<T>>` is the answer.
+
+**Question**: The book is going to have us store the receiving end of the `mpsc` channel in the `Arc<Mutex<T>>` so we can clone it and then pass it to each of the workers. This seems like an anti pattern. Why do we still need the mpsc channel? Why can't we just have the main thread add `Job`s to the queue held in the `Arc<Mutex<T>>` and then let the `Worker`s check the queue for `Job`s? 
+
+Probable answer: There could be infinite `Jobs` created by the main thread, the `mpsc` channel is just a convenient queue implementation for us to use.
+
+In `ThreadPool::new`:
+
+```
+    let (sender, receiver) = mpsc::channel();
+
+    let receiver = Arc::new(Mutex::new(receiver));
+
+    for id in 0..size {
+        workers.push(Worker::new(id, Arc::clone(&receiver)));
+    }
+```
+
+In order to implement the execute method we will need to make Job a type alias for a _trait object_ that holds the type of closure that `execute` receives.
+
+`type Job = Box<dyn FnOnce() -> () + Send + 'static>`
+
+**Question**: Why are we able to pass a unboxed closure to `#execute` but we need to box it to send it on the channel?
+
+Answer: If we try to do this, we will get an error:
+
+```
+error[E0308]: mismatched types
+  --> src/lib.rs:35:26
+   |
+29 |     pub fn execute<F>(&self, f: F)
+   |                    - this type parameter
+...
+35 |         self.sender.send(f).unwrap();
+   |                          ^ expected struct `Box`, found type parameter `F`
+   |
+   = note:      expected struct `Box<(dyn FnOnce() + Send + 'static)>`
+           found type parameter `F`
+   = note: for more on the distinction between the stack and the heap, read https://doc.rust-lang.org/book/ch15-01-box.html, https://doc.rust-lang.org/rust-by-example/std/box.html, and https://doc.rust-lang.org/std/boxed/index.html
+help: store this in the heap by calling `Box::new`
+   |
+35 |         self.sender.send(Box::new(f)).unwrap();
+```
+
+Although we would not be storing the closure `f` in any data structure, so it does not need to be boxed for satisfy the compiler's need for sized types, each thread will have a different call stack, so we need to box the closure so it ends up on the heap, where other threads can then access it.
+
+#### Making Each Worker's Thread Execute Jobs.
+
+```
+let thread = thread::spawn(|| loop {
+    let job = receiver.lock().unwrap().recv().unwrap();
+
+    println!("Worker {} got a job; executing.", id);
+
+    (*job)();
+});
+```
+
+First we call `.lock` on the `Mutex` to request the `MutexGuard` (remember a `MutexGuard` is a smart pointer to the inner data). We have to unwrap the `MutexGuard` from the `Result<MutexGuard<T>, PoisonError<E>>` it is stored in. Then we can call receive on the channel which will block until a value is received, which will also come in a `Result<T,E>` that needs to be unwrapped.
+
+We got another error regarding the closure capturing `receiver` and `id` via a borrow:
+
+```
+error[E0373]: closure may outlive the current function, but it borrows `receiver`, which is owned by the current function
+  --> src/lib.rs:56:36
+   |
+56 |         let thread = thread::spawn(|| loop {
+   |                                    ^^ may outlive borrowed value `receiver`
+57 |             let job = receiver.lock().unwrap().recv().unwrap();
+   |                       -------- `receiver` is borrowed here
+```
+
+We just need to indicate that the closure can take ownership of `receiver` and `id`. `id` will be used again late after the move, but that is okay because it is `Copy`.
+
+### Graceful Shutdown and Cleanup
+
+With our server working as intended, we still see 3 compiler warnings for unused variables, `workers` on `ThreadPool` plus `id` and `thread` on `Worker`. This indicates that we are not cleaning things up when our server shuts down.
+
+We need to implement the `Drop` trait on `ThreadPool` and have it call `join` on each of the threads in the pool to guarantee each thread finishes serving its request before closing. We also need to tell each thread to stop accepting new requests.
+
+#### Implementing the Drop Trait on `ThreadPool`
+
+```
+impl Drop for ThreadPool { fn drop(&mut self) {
+        for worker in &mut self.workers {
+            println!("Shutting down worker {}", worker.id);
+
+            worker.thread.join().unwrap();
+        }
+    }
+}
+```
+
+This first attempt results in an error: 
+
+```
+error[E0507]: cannot move out of `worker.thread` which is behind a mutable reference
+  --> src/lib.rs:44:13
+   |
+44 |             worker.thread.join().unwrap();
+   |             ^^^^^^^^^^^^^ move occurs because `worker.thread` has type `JoinHandle<()>`, which does not implement the `Copy` trait
+```
+
+`worker` is only a mutable reference, but `#join` takes ownership. We need to move the thread out of the `worker` instance so we can supply `#join` an owned value.
+
+Since we are attempting to move a value out of a mutable reference, we should be reaching for the `#take` method!
+
+First we'll have to wrap the `thread` in an `Option`.
+
+```
+struct Worker {
+    id: usize,
+    thread: Option<thread::JoinHandle<()>>,
+}
+```
+
+Then we can use the `#take` method to replace the `Some(thread)` in `worker.thread` with a `None` value, while we capture the `thread` as an owned value:
+
+```
+fn drop(&mut self) {
+    for worker in &mut self.workers {
+        println!("Shutting down worker {}", worker.id);
+
+        if let Some(thread) = worker.thread.take() {
+            thread.join().unwrap();
+        }
+    }
+}
+```
+
+#### Signaling to the Threads to Stop Listening for Jobs
+
+We are now calling `join` on the all the worker threads in the `ThreadPool`, which will cause our main thread to wait for each to finish and then shut down. 
+
+Unfortunately, each of the worker threads is still looping, attempting to acquire the Mutex to get more `Job`s. Given our current implementation, the main thread will wait forever for the first worker thread to finish.
+
+To fix this, we need to modify the threads so they listen for _either_ a `Job` to run or a signal that they should stop listening an shut down.
+
+Instead of `Job` instances, `#execute` will send one of two enum variants over the channel:
+
+```
+enum Message {
+    NewJob(Job),
+    Terminate
+}
+```
+
+We have to modify `#execute` to send this new type on the channel, and also `#new`, to define the threads in a way that they unpack each `Message` using `match`. 
+
+`#execute`:
+
+```
+pub fn execute<F>(&self, f: F)
+where
+    F: FnOnce() -> () + Send + 'static,
+{
+    let job = Box::new(f);
+
+    self.sender.send(Message::NewJob(job)).unwrap();
+}
+```
+
+
+`#new`:
+
+```
+pub fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
+    let thread = thread::spawn(move || loop {
+        let message = receiver.lock().unwrap().recv().unwrap();
+
+        match message {
+            NewJob(job) => {
+                println!("Worker: {} got a job; executing.", id);
+
+                job();
+            },
+            Terminate => {
+                println!("Worker: {} was told to terminate.", id);
+
+                break;
+            },
+        }
+    });
+    
+    // --snip--
+}
+```
+
+Now we are left with a warning because we are not creating any `Message`s of the `Terminate` variant. Recall that we were tying to tell our `Worker` threads to shut down in `ThreadPool::drop` dbefore we subsequently wait for the to finish shutting down. Now is the time to tell them to shut down:
+
+```
+fn drop(&mut self) {
+    println!("Sending Terminate Message to all workers.");
+
+    for _ in &mut self.workers {
+        self.sender.send(Message::Terminate).unwrap();
+    }
+
+    for worker in &mut self.workers {
+        println!("Shutting down worker {}", worker.id);
+
+        if let Some(thread) = worker.thread.take() {
+            thread.join().unwrap();
+        }
+    }
+}
+```
+
+Notice that we need the two loops because the first worker to receive a `Terminate` `Message` on the channel may not be the first worker that we pull off the `Vec<Worker>` in `for worker in &mut self.workers`. This would mean that we would be using `#join` to wait for a thread to finish, but that thread will not have been sent `Message::Terminate` yet! This would result in a deadlock.
+
+**Aside**: 
+
+`#take` is defined on `Iterator` as well:
+
+```
+for stream in listener.incoming().take(2) {
+    // --snip--
+}
+```
+
+Here we see it limit the iteration of a `for` loop.
+
+**Book Challenges**:
+
+- Add more documentation to `TheadPool` and its public methods.
+- Add tests of the library's functionality.
+- Change calls to `unwrap()` to more robust error handling.
+- Use `ThreadPool` to perform some task other than serving web requests.
+- Find a thread pool create on _https://crates.io/_ and implement a similar web server using the create instead. Then compare the API and robustness to the threadpool we implemented.
+
 
