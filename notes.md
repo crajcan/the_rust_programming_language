@@ -2929,7 +2929,7 @@ if let StringHolder { val: Some(s: &String) } = holder_ref {
 ```
 See `chapter_18/src/main.rs#borrow_nested_data_that_is_borrowed`.
 
-**Follow up**: So when are `ref` and `ref mut` used for in destructuring? Use them to destructure The `&StringHolder` and avoid using `as_ref` in `chapter_18/src/main.rs#borrow_nested_data_that_is_owned`
+**Follow up**: So when are `ref` and `ref mut` used for destructuring? Use them to destructure The `&StringHolder` and avoid using `as_ref` in `chapter_18/src/main.rs#borrow_nested_data_that_is_owned`
 
 It turns out we need to use `ref` when destructuring to get a reference into nested date of an _owned_ value. When the value is borrowed, we can get a reference into its nested data by providing a non-reference pattern, because of _match ergonomics_.
 
@@ -3380,7 +3380,7 @@ Creating raw pointers;
 ```
 let mut num = 5;
 let r1 = &num as *const i32;
-let r2= *mut num as *mut i32;
+let r2 = num as *mut i32;
 ```
 
 here `as` is used to cast normal references into _raw pointers_.
@@ -4235,7 +4235,7 @@ Notice that the Box will be `deref'd` automatically.
 
 #### Listening for a Connection
 
-_Hypertext Transfer Protocol_(HTTP), and _Transmission Control Protocol_(TCP). Both are _request-response_ protocols. The client initiates a request and a server listens and responds. TCP describes the details fo how infomration gets from one server to another. HTTP defines the contents of the requests and responses. HTTP doesn't require TCP but it is almost always used with TCP.
+_Hypertext Transfer Protocol_(HTTP), and _Transmission Control Protocol_(TCP). Both are _request-response_ protocols. The client initiates a request and a server listens and responds. TCP describes the details of how infomration gets from one server to another. HTTP defines the contents of the requests and responses. HTTP doesn't require TCP but it is almost always used with TCP.
 
 ```
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -4247,7 +4247,7 @@ _Hypertext Transfer Protocol_(HTTP), and _Transmission Control Protocol_(TCP). B
     }
 ```
 
-`TcpListener.bind` creates a new instance of `TcpListener`. `listener.incoming` returns an iterator of `Result<TcpStream, Error>`s. A `TcpStream` reperesnets an open connection between the client and the server, ie. the entire request response cycle where the client connects to the server, the server generates a response and closes the connection. `TcpStream` will both read from itself to see what the client sent and allow us to write a response to it. 
+`TcpListener#bind` creates a new instance of `TcpListener`. `listener#incoming` returns an iterator of `Result<TcpStream, Error>`s. A `TcpStream` reperesents an open connection between the client and the server, ie. the entire request response cycle where the client connects to the server, the server generates a response and closes the connection. `TcpStream` will both read from itself to see what the client sent and allow us to write a response to it. 
 
 Note that we are iterating over connection attempts (`Result<TcpStream, Error>`) not actual connections, so we could receive errors if connections are not successful due to OS conditions.
 
@@ -4261,13 +4261,13 @@ fn handle_connection(mut stream: TcpStream) {
 
     stream.read(&mut buffer).unwrap();
 
-    println!("Request: {}", String::from_utf16_lossy(&buffer[..]));
+    println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
 }
 ```
 
 `stream` is mutable here because the `TcpStream` type holds a pointer to the request data we can read from. To allow us to read the request data in segments, `TcpStream` may mutate this pointer.
 
-`String::from_utf16_lossy` creates a `String` from a `&[u8]`. The `lossy` part means that if it encounters an invalid UTF-8 sequence, it will replace the invalid sequence with `�` (the U+FFFD replacement character).
+`String::from_utf8_lossy` creates a `String` from a `&[u8]`. The `lossy` part means that if it encounters an invalid UTF-8 sequence, it will replace the invalid sequence with `�` (the U+FFFD replacement character).
 
 #### A Closer Look at an HTTP Request
 
@@ -4298,7 +4298,7 @@ headers CRLF
 message-body
 ```
 
-The first line is a _status line_ which contains the HTTP version, used in the response, a numeric status code, and a reason phrase that provdides a text description of the status code.
+The first line is a _status line_ which contains the HTTP version used in the response, a numeric status code and a reason phrase that provdides a text description of the status code.
 
 Following the status line is the headers, and finally the body of the response.
 
@@ -4309,7 +4309,7 @@ Following the status line is the headers, and finally the body of the response.
     stream.flush().unwrap();
 ```
 
-`stream.flush()` will prevent the program from continuing utnil all the bytes are written to the connection. `TcpStream` contains an internal buffer to minimize calls to the underlying operating system.
+`stream.flush()` will block the main thread until all the bytes are written to the connection. `TcpStream` contains an internal buffer to minimize calls to the underlying operating system.
 
 
 #### Validating the Request and Selectively Responding
@@ -4329,9 +4329,11 @@ Here, because `buffer` is an array of raw bytes, we will compare it to a _byte s
 
 A _threadpool_ is a group of spawned threads that are waiting and ready to handle a task. When the program receives a new task, it assigns one of the threads in the pool to process the task.
 
-Our _threadpool_ will be implemented by a with a request queue. The pool will maintain a queue of requests, each thread will dequeue a reqest, handle it, then ask the queue for another request.
+Our _threadpool_ will be implemented with a request queue. The pool will maintain a queue of requests, each thread will dequeue a reqest, handle it, then ask the queue for another request.
 
 **Big Challenge**: Instead of using a _threadpool_, implement the webserver with a _fork/join_ model, and a _async I/O_ model.
+
+Results: _fork/join_ doesn't really make sense for a webserver. Find _async I/O_ example in `chapter_20/asyncio`
 
 #### Compiler Driven Development
 
@@ -4687,4 +4689,397 @@ Here we see it limit the iteration of a `for` loop.
 - Use `ThreadPool` to perform some task other than serving web requests.
 - Find a thread pool create on _https://crates.io/_ and implement a similar web server using the create instead. Then compare the API and robustness to the threadpool we implemented.
 
+### Creating an AsyncIO server.
+
+From the _synchonous_ server: 
+
+```
+fn main() {
+    // Listen for incoming TCP connections on localhost port 7878
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+
+    // Block forever, handling each request that arrives at this IP address
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+
+        handle_connection(stream);
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    // --snipped--
+}
+```
+
+We can modify `handle_connection` to return a type that implements `Future`:
+
+async fn handle_connection(mut stream: TcpStream) {
+    // --snipped--
+}
+
+A `Future` type represents a value that might not have finished computing yet.
+
+```
+pub trait Future {
+    type Output;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+}
+```
+`poll` is a method does not block and tries to resolve to the final type. It is called repeatedly.
+
+Often when it is implemented for a type, the associated type `Output` is left empty: `Future<Output=()>`. Which means `poll` will never return an output. 
+
+Because we haven't `await`ed or `poll`ed `#handle_connection`, it will never run. So we modify our call to `handle_connection` to append an `await`:
+
+```
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+
+        handle_connection(stream).await;
+    }
+```
+
+The compiler then tells us that since our program is currently synchronous, we need to use an asynchronous runtime to allow for the use of `await`.
+
+```
+error[E0752]: `main` function is not allowed to be `async`
+ --> src/bin/main.rs:7:1
+  |
+7 | async fn main() {
+  | ^^^^^^^^^^^^^^^ `main` function is not allowed to be `async`
+```
+
+#### Adding an async runtime
+
+In `Cargo.toml`:
+
+```
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+```
+
+In `main.rs`:
+```
+#[tokio::main]
+async fn main() {
+```
+
+The use of `std::thread::#sleep` in `handle_connection` will still cause `handle_connection` to block the main thread. We need to use the non-blocking version, `async_std::task::sleep` instead. 
+
+```
+#[tokio::main]
+async fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+
+    for stream in listener.incoming() {
+    }
+```
+
+Above we also see that we are using the blocking `listener.incoming()` from `TcpListener`. We'll prefer to use the `tokio::net::TcpListener` instead:
+
+```
+#[tokio::main]
+async fn main() {
+    let listener: tokio::net::TcpListener = TcpListener::bind("127.0.0.1:7878").await.unwrap();
+
+    loop {
+        let (stream, _) = listener.accept().await.unwrap();
+
+        handle_connection(stream).await;
+    }
+}
+```
+
+This will still cause the main thread to block. We can wrap `#handle_connection` in a green thread to process it asynchronously but still with one thread:
+
+```
+    tokio::spawn(async move {
+        handle_connection(stream).await;
+    });
+```
+
+## Apendix A: Keywords
+
+Keywords cannot be used as names of functions, variables, parameters, struct fields, modules, crates, constants, macros, static values, attributes, types, traits or lifetimes.
+
+Remember *Attributes*: are metadata about pieces of Rust code, such as `#[derive(_)]` or `#[test]`.
+
+*as*: Perform primitive casting, disambiguate the specific trait containing an item, or rename items in `use` and `extern crate` statements.
+
+Cast between types:
+    `let thing1: u8 = 89.0 as u8;`
+Rename an import:
+    `use std::{mem as memory, net as network};`
+    `extern crate foo as bar;`
+Disambiguate the specific trait containing an item:
+    `println!("A baby dog is called a {}", <Dog as Animal>::baby_name());`
+
+*break*: exit a loop immediately
+
+*const*: define constant items or constant raw pointers
+    
+```
+const DAYS: &[&str] = &[
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh"
+];
+```
+
+raw pointers:
+
+```
+let mut num = 5;
+let r1 = &num as *const i32;
+let r2= *mut num as *mut i32;
+```
+
+*continue*: continue to the next loop iteration
+
+*crate*: link an external crate or a macro variable representing the crate in which the macro is defined
+
+```
+extern crate add_one;
+```
+
+**Challenge**: figure out what a "macro variable" is and how it can reprensent where a crate is defined. 
+
+*else*
+
+*enum*
+
+*extern*: Link an external crate, function or variable.
+
+Make your Rust create aware of other crates within your project:
+
+```
+`extern crate foo;`
+```
+
+Decalare function interface so rust can call foreign code using _FFI_:
+
+```
+#[link(name = "my_c_library")]
+extern "C" {
+    fn my_c_function(x: i32) -> bool;
+}
+```
+
+Define a function callable from other languages using _FFI_:
+
+```
+#[no_mangle]
+pub extern "C" fn callable_from_c(x: i32) -> bool {
+    x % 3 == 0
+}
+```
+
+*false*
+
+*fn*
+
+*for*
+
+loop over items from an iterator or range:
+
+```
+for i in 0..size {
+    // --snip--     
+}
+```
+
+implement a trait:
+
+```
+impl Debug for MyRectangle {
+    // --snip--
+};
+```
+
+Specify a higher-ranked lifetime:
+
+```
+where for<'a> F: Fn(&'a (u8, u16)) -> &'a u8,
+```
+(Where Fn(a, b, c) -> d is itself just sugar for the unstable real Fn trait)
+
+`for<'a>` can be read as "for all choices of `'a`", and basically produces an infinite list of trait bounds that `F` must satisfy. Intense. There aren't many places outside of the Fn traits where we encounter HRTBs, and even for those we have a nice magic sugar for the common cases.
+
+**Challenge**: consider revisiting this someday. Use the example from the [Rustonomicon](https://doc.rust-lang.org/nomicon/hrtb.html)
+
+*if*
+
+*impl*: implement inherent or trait functionality
+
+*in*: part of `for` loop syntax.
+
+*let*: bind a variable
+
+*loop*: loop unconditionally
+
+*match*: match a value to patterns
+
+*mod*: define a module
+
+*move*: make a closure take ownership of all its captures.
+
+*mut*: denote mutability in references, raw pointers, or pattern bindings
+
+In references and raw pointers:
+
+```
+    let mut x = "foobar".to_string();
+    let mutable = &mut x;
+    let raw = mutable as *mut String;
+```
+
+In pattern bindings: 
+
+```
+let mut robot_name = Some("borg".to_string());
+
+match robot_name {
+    Some(ref mut name) => *name = "blork".to_string(),
+    None => (),
+}
+```
+
+Remember using `Some(&mut name)` would try to match an existing reference and bind `name` to an owned value. This in practice would only work with values that are `Copy`.
+
+*pub*: denote public visibility in struct fields, impl blocks, or modules
+
+*ref*: bind by reference (create a reference to owned data through destructuring, see above)
+
+*return*
+
+*Self*: a type alias for the type implementing a trait
+
+*self*: method subject or current module
+
+```
+impl Pokemon for Dog {
+    pub fn evolve(&self) {
+        self.form += 1
+    }
+}
+```
+
+In paths, self can be used to refer to the current module, either in a use statement or in a path to access an element:
+
+```
+use std::io::{self, Read};
+```
+
+Is functionally the same as:
+
+```
+use std::io;
+use std::io::Read;
+```
+
+*static*: global variable or lifetime lasting the entire program execution
+
+global:
+
+```
+static HELLO_WORLD &str = "Hello, World!";
+```
+
+lifetime: 
+
+```
+let s: &'static str = "I have a static lifetime.";
+```
+
+*struct*
+
+*super*: parent module of the current module
+
+```
+use super::*;
+```
+
+*trait*: define a trait
+
+*true*
+
+*type*: define a type alias or associated type
+
+Associated type:
+
+```
+impl Iterator for Counter {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // --snip--
+    }
+}
+```
+
+Type alias (**Challenge** try implementing this including an implementation for `Deref`):
+
+```
+type Tree Rc<RefCell<TreeNode>>;
+```
+*union*: define a union and is only a keyword when used in a union declaration 
+
+A union looks like a struct but just allows for the interpretation of a single piece of data as multiple types:
+
+```
+    union IntOrFloat {
+        i: u32,
+        f: f32,
+    }
+
+    let mut u = IntOrFloat { f: 1.0 };
+
+    // Reading the fields of a union is always unsafe
+    assert_eq!(unsafe { u.i }, 1065353216);
+
+    // Updating through any of the field will modify all of them
+    u.i = 1073741824;
+    assert_eq!(unsafe { u.f }, 2.0);
+```
+
+Matching on a union works too:
+
+```
+    let u = IntOrFloat { f: 11.0 };
+
+    unsafe {
+        match u {
+            IntOrFloat { f: 10.0 } => println!("Found ten!"),
+            IntOrFloat { i } => println!("Found an int: {}", i),
+        }
+    }
+```
+
+*unsafe*: denote unsafe code, functions, traits or implementations
+
+```
+unsafe trait Foo {
+
+}
+
+unsafe impl Foo for i32 {
+
+}
+```
+
+*use*: import symbols into scope*
+
+*where*: denote clauses that constrain a type
+
+```
+pub fn notify<T>(item: T)
+where
+    T: Summary
+```
+
+*while*: loop conditionally based on the result of an expression
+
+```
+while let Some(top) = stack.pop() {
+    println!("{}", top);
+}
+```
 
