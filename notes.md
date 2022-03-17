@@ -5090,7 +5090,7 @@ Operators and other symbols appear by themselvs or in the context of paths, gene
 ### Operators
 
 | Operator | Example                            | Explanation                         | Overloadable? |
-| -------- + ---------------------------------- + ----------------------------------- + ------------- |
+| -------- | ---------------------------------- | ----------------------------------- | ------------- |
 | !        | ident!(..), ident!(..), ident!(..) | Macro Expansion                     |               |<-- what
 | !        | !expr                              | Bitwise or logical complement       | Not           |
 | !=       | var != expr                        | Nonequality comparison              | PartialEq     |
@@ -5108,9 +5108,9 @@ Operators and other symbols appear by themselvs or in the context of paths, gene
 | +        | impl<T: 'a Display + PartialOrd>   | Compound type constraint            |               |
 | +        | expr + expr                        | Arithmetic addition                 | Add           |
 | +=       | var += expr                        | Arithmetic addition and assign      | Addassign     |
-| ,   | expr, expr | Argument and element separater |  |
-| --- | ---------- || expr | Arithmetic negation | Neg |
-| ---- |expr - expr                         | Arithmetic subtraction              | Sub           |
+| ,        | expr, expr                         | Argument and element separater      |               |
+| -        | - expr                             | Arithmetic negation                 | Neg           |
+| -        |expr - expr                         | Arithmetic subtraction              | Sub           |
 | -=       | var -= expr                        | Subtraction and assignment          | SubAssign     |
 | ->       | where T: Fn(u32 -> u32), || -> u32 | Function and closure return type    |               |
 | .        | expr.ident                         | Member access                       |               |
@@ -5251,3 +5251,5 @@ Symbols don't behave like function or method calls, so they are not operators, t
 **Question** What does this mean when it says "Collection indexing _pretending_ to be collection slicing"?
 
 Possible answer: it seems this is just refering to Rust's facility for creating slices. It could have just said "Collection indexing used to create slices from collections."
+
+
