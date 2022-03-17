@@ -5083,3 +5083,171 @@ while let Some(top) = stack.pop() {
 }
 ```
 
+## Appendix B: Operators and Symbols
+
+Operators and other symbols appear by themselvs or in the context of paths, generics, trait bounds, macros, attributes, comments, tuples and brackets.
+
+### Operators
+
+| Operator | Example                            | Explanation                         | Overloadable? |
+| -------- + ---------------------------------- + ----------------------------------- + ------------- |
+| !        | ident!(..), ident!(..), ident!(..) | Macro Expansion                     |               |<-- what
+| !        | !expr                              | Bitwise or logical complement       | Not           |
+| !=       | var != expr                        | Nonequality comparison              | PartialEq     |
+| %        | expr % expr                        | Arithmetic Remainder                | Rem           |
+| %        | var %= expr                        | Arithmetic Remainder and assignment | RemAssign     |
+| &        | &expr, &mut expr                   | Borrow                              |               |
+| &        | &type                              | Borrowed pointer type               |               |
+| &        | expr & expr                        | Bitwise AND                         | BitAnd        |
+| &=       | var &= expr                        | Bitwise AND and assignment          | BitAndAssign  |
+| &&       | expr && expr                       | short-circuting logical AND         |               |
+| *        | expr * expr                        | Arithmentic multiplication          | Mul           |
+| *=       | var *= expr                        | multiplication and assignment       | MulAssign     |
+| *        | *expr                              | Dereference                         | Deref         |
+| *        | &const type, &mut type             | Raw pointer                         |               |
+| +        | impl<T: 'a Display + PartialOrd>   | Compound type constraint            |               |
+| +        | expr + expr                        | Arithmetic addition                 | Add           |
+| +=       | var += expr                        | Arithmetic addition and assign      | Addassign     |
+| ,   | expr, expr | Argument and element separater |  |
+| --- | ---------- || expr | Arithmetic negation | Neg |
+| ---- |expr - expr                         | Arithmetic subtraction              | Sub           |
+| -=       | var -= expr                        | Subtraction and assignment          | SubAssign     |
+| ->       | where T: Fn(u32 -> u32), || -> u32 | Function and closure return type    |               |
+| .        | expr.ident                         | Member access                       |               |
+| ..       | .., expr.., ..expr, expr..expr     | exclusive range literal             | PartialOrd    |
+| ..=      | ..=expr, expr..=expr               | inclusive range literal             | PartialOrd    |
+| ..       | Rectangle { x1: 5, ..rectangle }   | Struct literal update syntax        |               |
+| ..       | variant(x, ..), Rectangle { x, ..} | "And the rest" pattern binding      |               |
+| /        | expr / expr                        | Arithmetic division                 | Div           |
+| /=       | var /= expr                        | Arithmetic division and assignment  | DivAssign     |
+| :        | pat: type, ident: type             | Constraints such as arguments       |               |
+| :        | ident: expr                        | Struct field initializer            |               |
+| :        | 'a: loop {                         | Loop label                          |               |<-- what
+| ;        | expr;                              | Statement and item terminator       |               |
+| ;        | [...; len]                         | Part of fixed size array syntax     |               |
+| <<       | expr << expr                       | Left-shift                          | Shl           |
+| <<=      | var <<= expr                       | Left-shift and assignment           | ShlAssign     |
+| <        | expr < expr                        | Less than comparison                | PartialOrd    |
+| =        | var = expr, ident = type           | Assignment/Equivalence              |               |
+| ==       | expr == expr                       | Equality comparison                 | PartialEq     |
+| =>       | pat => expr                        | Part of match arm syntax            |               |
+| >        | expr > expr                        | Greater than comparison             | PartialOrd    |
+| >=       | expr >= expr                       | Greater than or equal to comparison | PartialOrd    |
+| >>       | expr >> expr                       | Right-shift                         | Shr           |
+| >>=      | var >>= expr                       | Right-shift and assignment          | ShrAssign     |
+| @        | User { id: my_id @ 3..=7 } => prin | Pattern binding                     |               |
+| ^        | expr & expr                        | Bitwise exclusive OR                | BitXor        |
+| ^=       | var ^= var                         | Bitwise exclusive OR and assignment | BitXorAssign  |
+| |        | pat | pat                          | Pattern alternatives                |               |
+| |        | expr | expr                        | Bitwise OR                          | BitOr         |
+| |=       | var |= expr                        | Biwise OR and assignment            | BitOrAssign   |
+| ||       | expr || expr                       | Short=circuting logical OR          |               |
+| ?        | expr?                              | Error propagation                   |               |
+
+### Symbols
+
+Symbols don't behave like function or method calls, so they are not operators, their usage is still reserved
+
+#### Symbols that appear on their own
+
+| Symbol/Example                 | Explanation                                                          |
+| ------------------------------ + -------------------------------------------------------------------- |
+| 'ident                         | Named lifetime or loop lable                                         |<-- what
+| ...u8, ..usize, etc            | Numeric literal of specific type                                     | 
+| "foobar"                       | String literal                                                       |
+| r"foo", r#"f"o", r##"f#o"##    | Raw string literal, escape characters not processed                  |
+| b"foo"                         | Byte string literal, constructs a [u8] instead of str                |
+| br"foo", br#"f"o", br##"f#o"## | Raw bytes string literal                                             |
+| 'f'                            | Character literal                                                    |
+| b'f'                           | ASCII byte literal                                                   |
+| |_| expr                       | Closure                                                              |
+| !                              | Always empty bottom type for diverging functions                     |
+| 1_000_000, _ => printlne!()    | ignored pattern binding; also used to make integer literals readable |
+
+
+#### Symbols that appear in the context of a path
+
+| Symbol | Example | Explanation |
+| ------ | ------- |+ ----------------------------------------------- |
+| ident::ident                        | std::env::Args                 | Namespace path                                  |
+| ::path                              | ::outermost::secret_function() | Path relative to the create route               |
+| self::path                          |                                | Path relative to the current module             |
+| super::path                         |                                | Path relative to tthe parent module             |
+| type::ident, <type as trait>::ident | String::from("foo")            | Associated constants, functions, and types      |
+| <type>::...                         | <&T>::..., <[T]>::...          | Associated item for a type that cannot be named |
+| trait::method(...)                  |                                | Disambiguate method call by specifying trait    |
+| type::method(...)                   |                                | Disambiguate method call by specifying type     |
+| <type as trait>::method             |                                | Disambiguate method call by naming trait & type |
+
+#### Symbols that appear in the context of generic type paramters
+
+| Symbol | Example | Explanation |
+| ------ | ------- |+ --------------------------------------------- |
+| path<...>                           | Vec<u8>                          | Specifies paramters to generic type in a type |
+| path::<...>, method::<...>          | "42".parse::<i32>()              | Turbofish                                     |
+| fn ident<...>  ...                  | fn my_func<T>() {}               | Define generic function                       |
+| struct ident<...>                   | struct my_type<T>                | Define generic structure                      |
+| enum ident<...>                     | enum my_type<T>                  | Define generic enumeration                    |
+| impl<...> ...                       | impl<T> Display for Rectangle<T> | Define generic implementation                 |
+| for<...> type                       |                                  | Higher-ranked lifetime bounds                 | 
+| type<ident=type>                    | Iterator<item=i32>               | Generic type with specified associated type   |
+
+#### Symbols that appear in the context of constraining generic type parameters with trait bounds
+
+| Symbol                | Explanation                                                                        |
+| --------------------- + ---------------------------------------------------------------------------------- |
+| T: U                  | Generic parameter T constrained to types that implement U                          |
+| T: 'a                 | Generic type T must outlive lifetime 'a. It can't contain any refs shorter than 'a |
+| T: 'static            | Generic type T contains no borrowed references other than 'static ones             |
+| 'b: 'a                | Generic lifetime 'b must outlive lifetime 'a                                       |
+| T: ?Sized             | Allow generic type parameter to by dynamically sized type                          |
+| 'a + U, trait + trait | Compound type constraint: generic paramter T outlives 'a and implements U          |
+
+#### Symbols that appear in the context of calling or defining macros and specifying attributes on an item
+
+| Symbol                                | Explanation                             |
+| ------------------------------------- + --------------------------------------- |
+| #[meta]                               | Outer attribute                         |
+| #![meta]                              | inner attribute                         |
+| $ident                                | Macro substitution                      |<-- what
+| $ident:kind                           | Macro capture                           |<-- what
+| $(...)...                             | Macro repetition                        |<-- what
+| ident!(...), ident!{...}, ident![...] | Macro invocation                        |<-- what
+
+#### Symbols that create comments
+
+| Symbol   | Explanation                                                                      |
+| -------- + -------------------------------------------------------------------------------- |
+| //       | Line comment                                                                     |
+| //!      | Inner line doc comment (applies to the parent, usually used to document modules) |
+| ///      | Outer line doc comment                                                           |
+| /*...*/  | Block comment                                                                    |
+| /*!...*/ | Inner block doc comment (applies to the parent)                                  |
+| /**...*/ | Outer block doc comment                                                          |
+
+#### Symbols that appear in the context of using tuples
+
+| Symbol          | Explanation                                                                      |
+| --------------- + -------------------------------------------------------------------------------- |
+| ()              | Empty (unit) tuple literal and type                                              |
+| (expr)          | Parenthesized expression                                                         |
+| (expr,)         | Single-element tuple expression                                                  |
+| (type,)         | Single-element tuple type                                                        |
+| (expr, ...)     | Tuple expression                                                                 |
+| (type, ...)     | Tuple type                                                                       |
+| expr(expr, ...) | Function call expression, initialize tuple struct, initialize tuple enum variant |
+| expr.0, expr.1  | Tuple indexing                                                                   |
+
+#### Square Brackets
+
+| Symbol                                     | Explanation                                         |
+| -----------------------------------------  + --------------------------------------------------- |
+| [...]                                      | Array literal                                       |
+| [expr; len]                                | Array literal containing len copies of expr         |
+| [type; len], `let x: [i32; 5] = [4; 5];`   | Array type containing len instance of type          |
+| expr[expr]                                 | Collection indexing. Overloadable (Index, IndexMut) |
+| expr[..], expr[a..], expr[..b], expr[a..b] | Collection indexing pretending to be collection slicing, using Range, RangeFrom, RangeTo or RangeFull as the "index" |
+
+**Question** What does this mean when it says "Collection indexing _pretending_ to be collection slicing"?
+
+Possible answer: it seems this is just refering to Rust's facility for creating slices. It could have just said "Collection indexing used to create slices from collections."
