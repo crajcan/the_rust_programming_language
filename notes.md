@@ -5151,7 +5151,7 @@ Symbols don't behave like function or method calls, so they are not operators, t
 #### Symbols that appear on their own
 
 | Symbol/Example                 | Explanation                                                          |
-| ------------------------------ + -------------------------------------------------------------------- |
+| ------------------------------ | -------------------------------------------------------------------- |
 | 'ident                         | Named lifetime or loop lable                                         |<-- what
 | ...u8, ..usize, etc            | Numeric literal of specific type                                     | 
 | "foobar"                       | String literal                                                       |
@@ -5167,8 +5167,8 @@ Symbols don't behave like function or method calls, so they are not operators, t
 
 #### Symbols that appear in the context of a path
 
-| Symbol | Example | Explanation |
-| ------ | ------- |+ ----------------------------------------------- |
+| Symbol                              | Example                        | Explanation                                     |
+| ----------------------------------- | ------------------------------ | ----------------------------------------------- |
 | ident::ident                        | std::env::Args                 | Namespace path                                  |
 | ::path                              | ::outermost::secret_function() | Path relative to the create route               |
 | self::path                          |                                | Path relative to the current module             |
@@ -5181,8 +5181,8 @@ Symbols don't behave like function or method calls, so they are not operators, t
 
 #### Symbols that appear in the context of generic type paramters
 
-| Symbol | Example | Explanation |
-| ------ | ------- |+ --------------------------------------------- |
+| Symbol                              | Example                          | Explanation                                   |
+| ----------------------------------- | -------------------------------- | --------------------------------------------- |
 | path<...>                           | Vec<u8>                          | Specifies paramters to generic type in a type |
 | path::<...>, method::<...>          | "42".parse::<i32>()              | Turbofish                                     |
 | fn ident<...>  ...                  | fn my_func<T>() {}               | Define generic function                       |
@@ -5195,7 +5195,7 @@ Symbols don't behave like function or method calls, so they are not operators, t
 #### Symbols that appear in the context of constraining generic type parameters with trait bounds
 
 | Symbol                | Explanation                                                                        |
-| --------------------- + ---------------------------------------------------------------------------------- |
+| --------------------- | ---------------------------------------------------------------------------------- |
 | T: U                  | Generic parameter T constrained to types that implement U                          |
 | T: 'a                 | Generic type T must outlive lifetime 'a. It can't contain any refs shorter than 'a |
 | T: 'static            | Generic type T contains no borrowed references other than 'static ones             |
@@ -5206,7 +5206,7 @@ Symbols don't behave like function or method calls, so they are not operators, t
 #### Symbols that appear in the context of calling or defining macros and specifying attributes on an item
 
 | Symbol                                | Explanation                             |
-| ------------------------------------- + --------------------------------------- |
+| ------------------------------------- | --------------------------------------- |
 | #[meta]                               | Outer attribute                         |
 | #![meta]                              | inner attribute                         |
 | $ident                                | Macro substitution                      |<-- what
@@ -5217,7 +5217,7 @@ Symbols don't behave like function or method calls, so they are not operators, t
 #### Symbols that create comments
 
 | Symbol   | Explanation                                                                      |
-| -------- + -------------------------------------------------------------------------------- |
+| -------- | -------------------------------------------------------------------------------- |
 | //       | Line comment                                                                     |
 | //!      | Inner line doc comment (applies to the parent, usually used to document modules) |
 | ///      | Outer line doc comment                                                           |
@@ -5228,7 +5228,7 @@ Symbols don't behave like function or method calls, so they are not operators, t
 #### Symbols that appear in the context of using tuples
 
 | Symbol          | Explanation                                                                      |
-| --------------- + -------------------------------------------------------------------------------- |
+| --------------- | -------------------------------------------------------------------------------- |
 | ()              | Empty (unit) tuple literal and type                                              |
 | (expr)          | Parenthesized expression                                                         |
 | (expr,)         | Single-element tuple expression                                                  |
@@ -5241,7 +5241,7 @@ Symbols don't behave like function or method calls, so they are not operators, t
 #### Square Brackets
 
 | Symbol                                     | Explanation                                         |
-| -----------------------------------------  + --------------------------------------------------- |
+| -----------------------------------------  | --------------------------------------------------- |
 | [...]                                      | Array literal                                       |
 | [expr; len]                                | Array literal containing len copies of expr         |
 | [type; len], `let x: [i32; 5] = [4; 5];`   | Array type containing len instance of type          |
