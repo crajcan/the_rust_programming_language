@@ -3,6 +3,13 @@
 These are notes that I took every time I encountered a fact I didn't already know, or was introduced to
 a concept that I didn't immediately understand
 
+The notes that follow were created whenever I encountered a fact/concept that was:
+
+Unknown to me
+Non-trivial
+Important
+Hard to remember
+
 ## Chapter 1
 
 ```
@@ -5091,7 +5098,7 @@ Operators and other symbols appear by themselvs or in the context of paths, gene
 
 | Operator | Example                            | Explanation                         | Overloadable? |
 | -------- | ---------------------------------- | ----------------------------------- | ------------- |
-| !        | ident!(..), ident!(..), ident!(..) | Macro Expansion                     |               |<-- what
+| !        | ident!(..), ident!(..), ident!(..) | Macro Expansion                     |               | <-- what                         |
 | !        | !expr                              | Bitwise or logical complement       | Not           |
 | !=       | var != expr                        | Nonequality comparison              | PartialEq     |
 | %        | expr % expr                        | Arithmetic Remainder                | Rem           |
@@ -5110,9 +5117,9 @@ Operators and other symbols appear by themselvs or in the context of paths, gene
 | +=       | var += expr                        | Arithmetic addition and assign      | Addassign     |
 | ,        | expr, expr                         | Argument and element separater      |               |
 | -        | - expr                             | Arithmetic negation                 | Neg           |
-| -        |expr - expr                         | Arithmetic subtraction              | Sub           |
+| -        | expr - expr                        | Arithmetic subtraction              | Sub           |
 | -=       | var -= expr                        | Subtraction and assignment          | SubAssign     |
-| ->       | where T: Fn(u32 -> u32), || -> u32 | Function and closure return type    |               |
+| ->       | where T: Fn(u32 -> u32),           |                                     | -> u32        | Function and closure return type |             |
 | .        | expr.ident                         | Member access                       |               |
 | ..       | .., expr.., ..expr, expr..expr     | exclusive range literal             | PartialOrd    |
 | ..=      | ..=expr, expr..=expr               | inclusive range literal             | PartialOrd    |
@@ -5122,7 +5129,7 @@ Operators and other symbols appear by themselvs or in the context of paths, gene
 | /=       | var /= expr                        | Arithmetic division and assignment  | DivAssign     |
 | :        | pat: type, ident: type             | Constraints such as arguments       |               |
 | :        | ident: expr                        | Struct field initializer            |               |
-| :        | 'a: loop {                         | Loop label                          |               |<-- what
+| :        | 'a: loop {                         | Loop label                          |               | <-- what                         |
 | ;        | expr;                              | Statement and item terminator       |               |
 | ;        | [...; len]                         | Part of fixed size array syntax     |               |
 | <<       | expr << expr                       | Left-shift                          | Shl           |
@@ -5138,10 +5145,10 @@ Operators and other symbols appear by themselvs or in the context of paths, gene
 | @        | User { id: my_id @ 3..=7 } => prin | Pattern binding                     |               |
 | ^        | expr & expr                        | Bitwise exclusive OR                | BitXor        |
 | ^=       | var ^= var                         | Bitwise exclusive OR and assignment | BitXorAssign  |
-| |        | pat | pat                          | Pattern alternatives                |               |
-| |        | expr | expr                        | Bitwise OR                          | BitOr         |
-| |=       | var |= expr                        | Biwise OR and assignment            | BitOrAssign   |
-| ||       | expr || expr                       | Short=circuting logical OR          |               |
+|          |                                    | pat                                 | pat           | Pattern alternatives             |             |
+|          |                                    | expr                                | expr          | Bitwise OR                       | BitOr       |
+|          | =                                  | var                                 | = expr        | Biwise OR and assignment         | BitOrAssign |
+|          |                                    |                                     | expr          |                                  | expr        | Short=circuting logical OR |  |
 | ?        | expr?                              | Error propagation                   |               |
 
 ### Symbols
@@ -5152,15 +5159,15 @@ Symbols don't behave like function or method calls, so they are not operators, t
 
 | Symbol/Example                 | Explanation                                                          |
 | ------------------------------ | -------------------------------------------------------------------- |
-| 'ident                         | Named lifetime or loop lable                                         |<-- what
-| ...u8, ..usize, etc            | Numeric literal of specific type                                     | 
+| 'ident                         | Named lifetime or loop lable                                         | <-- what |
+| ...u8, ..usize, etc            | Numeric literal of specific type                                     |
 | "foobar"                       | String literal                                                       |
 | r"foo", r#"f"o", r##"f#o"##    | Raw string literal, escape characters not processed                  |
 | b"foo"                         | Byte string literal, constructs a [u8] instead of str                |
 | br"foo", br#"f"o", br##"f#o"## | Raw bytes string literal                                             |
 | 'f'                            | Character literal                                                    |
 | b'f'                           | ASCII byte literal                                                   |
-| |_| expr                       | Closure                                                              |
+|                                | _                                                                    | expr     | Closure |
 | !                              | Always empty bottom type for diverging functions                     |
 | 1_000_000, _ => printlne!()    | ignored pattern binding; also used to make integer literals readable |
 
@@ -5181,16 +5188,16 @@ Symbols don't behave like function or method calls, so they are not operators, t
 
 #### Symbols that appear in the context of generic type paramters
 
-| Symbol                              | Example                          | Explanation                                   |
-| ----------------------------------- | -------------------------------- | --------------------------------------------- |
-| path<...>                           | Vec<u8>                          | Specifies paramters to generic type in a type |
-| path::<...>, method::<...>          | "42".parse::<i32>()              | Turbofish                                     |
-| fn ident<...>  ...                  | fn my_func<T>() {}               | Define generic function                       |
-| struct ident<...>                   | struct my_type<T>                | Define generic structure                      |
-| enum ident<...>                     | enum my_type<T>                  | Define generic enumeration                    |
-| impl<...> ...                       | impl<T> Display for Rectangle<T> | Define generic implementation                 |
-| for<...> type                       |                                  | Higher-ranked lifetime bounds                 | 
-| type<ident=type>                    | Iterator<item=i32>               | Generic type with specified associated type   |
+| Symbol                     | Example                          | Explanation                                   |
+| -------------------------- | -------------------------------- | --------------------------------------------- |
+| path<...>                  | Vec<u8>                          | Specifies paramters to generic type in a type |
+| path::<...>, method::<...> | "42".parse::<i32>()              | Turbofish                                     |
+| fn ident<...>  ...         | fn my_func<T>() {}               | Define generic function                       |
+| struct ident<...>          | struct my_type<T>                | Define generic structure                      |
+| enum ident<...>            | enum my_type<T>                  | Define generic enumeration                    |
+| impl<...> ...              | impl<T> Display for Rectangle<T> | Define generic implementation                 |
+| for<...> type              |                                  | Higher-ranked lifetime bounds                 |
+| type<ident=type>           | Iterator<item=i32>               | Generic type with specified associated type   |
 
 #### Symbols that appear in the context of constraining generic type parameters with trait bounds
 
@@ -5205,14 +5212,14 @@ Symbols don't behave like function or method calls, so they are not operators, t
 
 #### Symbols that appear in the context of calling or defining macros and specifying attributes on an item
 
-| Symbol                                | Explanation                             |
-| ------------------------------------- | --------------------------------------- |
-| #[meta]                               | Outer attribute                         |
-| #![meta]                              | inner attribute                         |
-| $ident                                | Macro substitution                      |<-- what
-| $ident:kind                           | Macro capture                           |<-- what
-| $(...)...                             | Macro repetition                        |<-- what
-| ident!(...), ident!{...}, ident![...] | Macro invocation                        |<-- what
+| Symbol                                | Explanation        |
+| ------------------------------------- | ------------------ |
+| #[meta]                               | Outer attribute    |
+| #![meta]                              | inner attribute    |
+| $ident                                | Macro substitution | <-- what |
+| $ident:kind                           | Macro capture      | <-- what |
+| $(...)...                             | Macro repetition   | <-- what |
+| ident!(...), ident!{...}, ident![...] | Macro invocation   | <-- what |
 
 #### Symbols that create comments
 
@@ -5240,16 +5247,94 @@ Symbols don't behave like function or method calls, so they are not operators, t
 
 #### Square Brackets
 
-| Symbol                                     | Explanation                                         |
-| -----------------------------------------  | --------------------------------------------------- |
-| [...]                                      | Array literal                                       |
-| [expr; len]                                | Array literal containing len copies of expr         |
-| [type; len], `let x: [i32; 5] = [4; 5];`   | Array type containing len instance of type          |
-| expr[expr]                                 | Collection indexing. Overloadable (Index, IndexMut) |
+| Symbol                                     | Explanation                                                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| [...]                                      | Array literal                                                                                                        |
+| [expr; len]                                | Array literal containing len copies of expr                                                                          |
+| [type; len], `let x: [i32; 5] = [4; 5];`   | Array type containing len instance of type                                                                           |
+| expr[expr]                                 | Collection indexing. Overloadable (Index, IndexMut)                                                                  |
 | expr[..], expr[a..], expr[..b], expr[a..b] | Collection indexing pretending to be collection slicing, using Range, RangeFrom, RangeTo or RangeFull as the "index" |
 
 **Question** What does this mean when it says "Collection indexing _pretending_ to be collection slicing"?
 
 Possible answer: it seems this is just refering to Rust's facility for creating slices. It could have just said "Collection indexing used to create slices from collections."
 
+## Appendix C: Derivable Traits
 
+Libraries can implement `derive` for their own traits, making the list of traits you can use `derive` with truly open-ended. Implementing `derive` involves using a procedural macro.  
+
+### Partial Eq and Eq
+
+`PartialEq`: Says two structs are equal if all their fields are equal, and that `enum` variants are equal to themselves. Allows us to use `assert_eq!`, `==`, etc...
+
+`Eq`: Has no methods, just marks that for every value of a type, the value is equal to itself. Only types that can implement `PartialEq` can implement `Eq`, but the converse is not true. Implementing `Eq` allows us to use a type as a key for a `HashMap`, marking a type `Eq` tells the compiler that it will always be able to tell if two keys of the type are the same. Note this is why `f32`, for example, cannot be used for `HashMap` keys, because the `NaN` value is not equal to itself.
+
+Also note that the reason `PartialEq` is named such is because it is not valid for all values in the range.
+
+### PartialOrd and Ord
+
+`PartialOrd`: Allows comparison of a type for sorting purposes. A type that implements `PartialOrd` allows for the use of `<, >, <=, and =>`.
+
+Deriving `PartialOrd` implements the `partial_cmp` method which returns an `Option<Ordering>` that will be `None` when the values don't produce an ordering (such as the `NaN` `f32` value). 
+
+When derived on `structs`, `PartialOrd` compares two instances by comparing the value in each field in the order in which the fields appear in the struct definition. When derived on `enum`s, variants declared earlier in the `enum` definition are considered less than those defined later. 
+
+The `Ord` trait marks a type to say that for any two values o the type, an ordering exists. The `Ord` trait implements `#cmp` which returns an `Ordering` rather than `Option<Ordering>`. `Ord` can be derived on types that implement `PartialOrd` and `Eq`. That is when the values don't produce an ordering, they can be considered equal.
+
+`Ord` is required to store a type `T` in a `BTreeSet<T>`, which stores data based on the sort order of the values.
+
+### Clone and Copy for Duplicating Values
+
+`Clone` implementations allow us to run arbitrary code in order to copy (deep copy) heap data. We can derive `Clone` if all fields or values in a given type also implement `Clone`.
+
+`Clone` is often required to use methods that construct different types, such as to use `#to_vec` on a slice to construct a `Vec`. To use `to_vec` to create a `Vec<T>`, `T` must be `Clone`.
+
+`Copy` allows you to duplicate a value only by copying bits stored on the stack. No arbitrary code is necessary (or allowed, as `Copy` doesn't expose any methods). `Copy` can also be derived when all fields or values of a given type also implement `Copy`. Any type that is `Copy` is also `Clone`. Everything possible with `Copy` is also possible with `Clone`, it may just take longer.
+
+We've seen many examples of when `Copy` allows a value to be copied implicitly, avoiding the need to borrow values that are owned.
+
+### Hash for Mapping a Value to a Value of Fixed Size
+
+Types that implement `Hash` have a `hash` function which allows you to take an instance of a type of arbitrary size and map it to a value of fixed size. Deriving `Hash` is again possible if all the values/fields of a given type implement `Hash`. The derived `hash` method implementation combines the result of calling `hash` on each of the values/fields of the type.
+
+### `Default` for Default Values
+
+The `Default` trait allows you to create a default value for a type. Deriving `Default` implements the `default` function. The derived `default` function calls the `default` function on each part of the type (which also must implement `Default`).
+
+
+`Default::default` is often used with struct update syntax:
+
+```
+    let foo = Foo {
+        x: 1,
+        ..Default::default()
+    };
+```
+
+`Default` is required when you call `unwrap_or_default` on `Option<T>`, which returns the result of `Default::default` for the type `T` when the `Option<T>` is `None`.
+
+### New Version Appendix D - Useful Development Tools
+
+#### Automatic Formatting with `rustfmt`
+
+`rustfmt`, which can be run with either `cargo fmt`, `cargo-fmt`, or `rustfmt` if you provide file paths, formats code for style.
+
+**Challenge**: Get vs code or your current editor to automatically run `cargo fmt` when a rust file is saved.
+
+Answer: In `settings.json`:
+
+```
+    "[rust]": {
+        "editor.formatOnSave": true,
+    },
+```
+
+#### Fix Your Code with `rustfix`
+
+We can run `rustfix` by calling `cargo fix`, which will fix certain compiler warnings.
+
+#### More Lints with Clippy
+
+`clippy` provides more lints to catch common mistakes. 
+
+**Challenge**: Consider running clippy either before commit, push, or merge. 
