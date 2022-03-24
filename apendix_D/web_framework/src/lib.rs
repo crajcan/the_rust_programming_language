@@ -1,10 +1,13 @@
+pub use http_route::HttpRoute;
+pub use route_attribute::route;
+
 pub trait ServiceFactory<T> {
     fn register(self, app: &mut App<T>);
 }
 
 pub struct App<T> {
     services: Vec<T>,
-    routes: Vec<Route>,
+    routes: Vec<HttpRoute>,
 }
 
 impl<F> App<F> {
@@ -20,10 +23,4 @@ impl<F> App<F> {
 
         self
     }
-}
-
-pub struct Route {
-    verb: String,
-    uri: String,
-    method: String, //Ident?...fn? (function)?...Fn? (closure)?
 }

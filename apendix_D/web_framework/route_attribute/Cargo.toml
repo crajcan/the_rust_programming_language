@@ -11,3 +11,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0.89", features = [ "full", "parsing", "printing" ] }
 quote = "1.0"
+http_route = { path = "../http_route" }

@@ -1,4 +1,4 @@
-use web_framework::*;
+use web_framework::{App};
 
 mod controllers;
 

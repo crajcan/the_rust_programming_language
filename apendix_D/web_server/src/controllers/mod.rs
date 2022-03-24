@@ -1,5 +1,4 @@
-use route_attribute::route;
-use web_framework::{App, ServiceFactory};
+use web_framework::{route, HttpRoute};
 
-#[route(GET, "/")]
+#[route("GET", "/")]
 fn index() {}

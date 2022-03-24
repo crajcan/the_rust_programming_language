@@ -3,6 +3,10 @@
 version = 3
 
 [[package]]
+name = "http_route"
+version = "0.1.0"
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -24,6 +28,7 @@ dependencies = [
 name = "route_attribute"
 version = "0.1.0"
 dependencies = [
+ "http_route",
  "quote",
  "syn",
 ]
@@ -48,11 +53,14 @@ checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
 [[package]]
 name = "web_framework"
 version = "0.1.0"
+dependencies = [
+ "http_route",
+ "route_attribute",
+]
 
 [[package]]
 name = "web_server"
 version = "0.1.0"
 dependencies = [
- "route_attribute",
  "web_framework",
 ]

@@ -1,5 +1,6 @@
 extern crate proc_macro;
 
+use http_route::HttpRoute;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn;
@@ -12,13 +13,19 @@ use syn::DeriveInput;
 /// in this case, the function "index"
 #[proc_macro_attribute]
 pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
+    println!("**** Parsing TokenStreams in route attribute ****");
+    println!("attrs.to_string(): {}", attrs.to_string());
+
     let attrs = parse_macro_input!(attrs as syn::AttributeArgs);
     let verb = attrs.get(0).unwrap();
 
-    quote! {
-        fn route() {
-            Route { verb: #verb,  uri: "/", method: "index" }
+    let result = quote! {
+        pub fn index() -> HttpRoute {
+            HttpRoute { verb: #verb,  uri: "/", method: "index" }
         }
     }
-    .into()
+    .into();
+
+    println!("**** Returning TokenStream from route attribute ****");
+    result
 }
