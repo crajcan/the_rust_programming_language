@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "attribute_like"
+name = "web_framework"
 version = "0.1.0"

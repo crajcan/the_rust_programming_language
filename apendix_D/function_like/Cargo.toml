@@ -1,5 +1,5 @@
 [package]
-name = "route_attribute"
+name = "function_like"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,5 +9,5 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.89", features = [ "full", "parsing", "printing" ] }
+syn = "1.0"
 quote = "1.0"
