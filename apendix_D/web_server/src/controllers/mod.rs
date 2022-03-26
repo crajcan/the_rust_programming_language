@@ -1,4 +1,4 @@
-use web_framework::{route, HttpRoute};
+use web_framework::{route, HttpRoute, HttpVerb::GET};
 
-#[route("GET", "/")]
+#[route(GET, "/")]
 fn index() {}

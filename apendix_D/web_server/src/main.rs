@@ -1,4 +1,4 @@
-use web_framework::{App};
+use web_framework::App;
 
 mod controllers;
 
@@ -13,9 +13,9 @@ use controllers::*;
 /// When we pass "index" to app.service(), service will call "register" on #name.
 /// "register" will then add (#name, index, fn) to a app.paths vector.
 fn main() {
-    let app = App::new();
+    let mut app = App::new();
 
-    app.service(index);
+    let foo = app.service(index);
 
-    println!("app: {:?}", app);
+    //    println!("app: {:?}", foo);
 }
