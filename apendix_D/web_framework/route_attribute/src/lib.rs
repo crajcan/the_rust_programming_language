@@ -18,10 +18,11 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
 
     let attrs = parse_macro_input!(attrs as syn::AttributeArgs);
     let verb = attrs.get(0).unwrap();
+    let uri = attrs.get(1).unwrap();
 
     quote! {
         pub fn index() -> HttpRoute {
-            HttpRoute { verb: #verb,  uri: "/".to_string(), method: "index".to_string() }
+            HttpRoute { verb: #verb,  uri: (#uri).to_string(), method: "index".to_string() }
         }
     }
     .into()
