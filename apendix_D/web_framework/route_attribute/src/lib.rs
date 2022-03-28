@@ -23,6 +23,12 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let method = method_name.to_string();
     println!("method: {}", method);
 
+    // pub struct
+
+    // impl ServiceFactory {
+    //     fn register(&self, routes: &mut Vec<HttpRoute>);
+    // }
+
     quote! {
         pub fn #method_name() -> HttpRoute {
            HttpRoute { verb: #verb,  uri: (#uri).to_string(), method: (#method).to_string() }
