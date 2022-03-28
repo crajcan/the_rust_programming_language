@@ -5584,3 +5584,58 @@ fn main() {
 ```
 
 **Challenge**: Figure out if _function-like_ macros need to be encapsulated in a `proc-macro` type crate, then implement a _function-like_ macro that generates the code you want!
+
+### (Unrelated: Referring to type at runtime)
+
+Note that when we refer to a unit struct in our program, we are actually instantiating a value of that type:
+
+```
+struct foobar;
+
+fn main() {
+    let x = foobar;
+    App.new().servers(x).bind()
+}
+```
+
+There is no way to refer directly to a type by name at runtime, since that information does not exist at runtime. So if we check the type of the value...
+
+```
+struct foobar;
+
+fn main() {
+    let x = foobar;
+    App.new().servers(x).bind()
+    let () = x;
+}
+```
+
+We will see that it has been instantiated as a struct:
+
+```
+let () = x;
+    ^^   - this expression has type `foobar`
+    |
+    expected struct `foobar`, found `()`
+```
+
+Also, If we try to refer to a struct that holds data in this way...
+
+```
+struct foobar {
+    x: i32,
+    y: i32,
+};
+
+fn main() {
+    let x = foobar;
+}
+```
+
+we will also get an error:
+
+```
+let x = foobar;
+        ^^^^^^ help: use struct literal syntax instead: `foobar { x: val, y: val }`
+
+```

@@ -473,6 +473,30 @@ fn use_x_value() {
     println!("p.x_value(): {}", p.x_value());
     println!("Point::x_value(p): {}", Point::x_value(&p));
 }
+#[derive(Debug, PartialEq)]
+struct foobar;
+
+fn use_type_name_at_runtime() {
+    // let x = foobar;
+    // let () = x;
+}
+
+fn check_addresses_of_unit_struct() {
+    let x = foobar;
+    let y = foobar;
+    assert_eq!(x, y);
+
+    // same value, different addresses
+    println!("address of x: unit type = {:p}", &x);
+    println!("address of y: unit_type = {:p}", &y);
+
+    // same value, same address
+    let s = "foobar".to_string();
+    let a = &s;
+    let b = &s;
+    println!("address of a: &str = {:p}", a);
+    println!("address of b: &str = {:p}", b);
+}
 
 fn main() {
     arbitrary_memory();
@@ -498,4 +522,6 @@ fn main() {
     closure_traits_review();
     use_function_pointers_or_closures();
     use_x_value();
+    use_type_name_at_runtime();
+    check_addresses_of_unit_struct();
 }
