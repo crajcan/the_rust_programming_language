@@ -30,7 +30,15 @@ version = "0.1.0"
 dependencies = [
  "http_route",
  "quote",
+ "service_factory",
  "syn",
+]
+
+[[package]]
+name = "service_factory"
+version = "0.1.0"
+dependencies = [
+ "http_route",
 ]
 
 [[package]]

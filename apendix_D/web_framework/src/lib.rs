@@ -1,11 +1,6 @@
 pub use http_route::{HttpRoute, HttpVerb};
 pub use route_attribute::route;
-
-/// This was going to be used if we were going to turn every route into a type
-/// then implement register so each route type could push a path object onto App.routes
-pub trait ServiceFactory {
-    fn register(&self, routes: &mut Vec<HttpRoute>);
-}
+pub use service_factory::ServiceFactory;
 
 pub struct App {
     services: Vec<Box<dyn ServiceFactory>>,

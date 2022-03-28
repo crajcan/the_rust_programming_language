@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 http_route = { path = "http_route" }
 route_attribute = { path = "route_attribute" }
+service_factory = { path = "service_factory" }
