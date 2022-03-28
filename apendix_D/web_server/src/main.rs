@@ -13,7 +13,9 @@ mod controllers;
 fn main() {
     let mut app = App::new();
 
-    app.service(controllers::index).bind();
+    app.service(controllers::index)
+        .service(controllers::show)
+        .bind();
 
-    println!("app.routes: {:?}", app.routes());
+    println!("app.routes: {:#?}", app.routes());
 }

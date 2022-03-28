@@ -4,3 +4,8 @@ use web_framework::{route, HttpRoute, HttpVerb::GET, ServiceFactory};
 fn index() {
     println!("index")
 }
+
+#[route(GET, "/show")]
+fn show() {
+    println!("show")
+}
