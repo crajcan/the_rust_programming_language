@@ -19,13 +19,13 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let uri = attrs.get(1).unwrap();
 
     let ast: ItemFn = syn::parse(item).unwrap();
-    let method = ast.sig.ident;
-    let method = method.to_string();
+    let method_name = ast.sig.ident;
+    let method = method_name.to_string();
     println!("method: {}", method);
 
     quote! {
-        pub fn index() -> HttpRoute {
-            HttpRoute { verb: #verb,  uri: (#uri).to_string(), method: (#method).to_string() }
+        pub fn #method_name() -> HttpRoute {
+           HttpRoute { verb: #verb,  uri: (#uri).to_string(), method: (#method).to_string() }
         }
     }
     .into()
