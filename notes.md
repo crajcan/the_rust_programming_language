@@ -17,7 +17,7 @@ The notes that follow were created whenever I encountered a fact/concept that wa
   - [Arrays](#arrays)
 - [Chapter 4](#chapter-4)
   - [String](#string)
-  - [String Slice](#string-slice)
+  - [String Slice (&str)](#string-slice-str)
 - [Chapter 5](#chapter-5)
   - [Structs](#structs)
 - [Chapter 6 (Enums and Pattern Matching)](#chapter-6-enums-and-pattern-matching)
@@ -44,7 +44,7 @@ The notes that follow were created whenever I encountered a fact/concept that wa
 - [Chapter 12 (An I/O project: Building a Command Line Program)](#chapter-12-an-io-project-building-a-command-line-program)
   - [Reading Argument Values](#reading-argument-values)
   - [Separation of Concerns for Binary Projects](#separation-of-concerns-for-binary-projects)
-  - [Idiomatic Rust](#idiomatic-rust)
+  - [Writing Idiomatic Rust](#writing-idiomatic-rust)
 - [Chapter 13 (Iterators and Closures)](#chapter-13-iterators-and-closures)
   - [Iterators](#iterators)
   - [Custom Iterators](#custom-iterators)
@@ -72,8 +72,8 @@ The notes that follow were created whenever I encountered a fact/concept that wa
   - [`Rc<T>`, the Reference Counting Smart Pointer](#rct-the-reference-counting-smart-pointer)
   - [Interior Mutability](#interior-mutability)
   - [Having Multiple Owners of Mutable Data by Combining Rc<T> and RefCell<T>](#having-multiple-owners-of-mutable-data-by-combining-rct-and-refcellt)
-  - [Reference Cylces Can Leak Memory](#reference-cylces-can-leak-memory)
-  - [Preventing Reference Cycles: Turning an Rc<T> into a Weak<T>](#preventing-reference-cycles-turning-an-rct-into-a-weakt)
+  - [Reference Cycles Can Leak Memory](#reference-cycles-can-leak-memory)
+  - [Preventing Reference Cycles: Turning an `Rc<T>` into a `Weak<T>`](#preventing-reference-cycles-turning-an-rct-into-a-weakt)
   - [Creating a Tree Data Structure](#creating-a-tree-data-structure)
 - [Chapter 16 (Fearless Concurrency)](#chapter-16-fearless-concurrency)
   - [Using Threads to Run Code Simultaneously](#using-threads-to-run-code-simultaneously)
@@ -83,7 +83,7 @@ The notes that follow were created whenever I encountered a fact/concept that wa
   - [Extensible Concurrency with the Sync and Send Traits](#extensible-concurrency-with-the-sync-and-send-traits)
 - [Chapter 17 (Object-Oriented Programming Features of Rust)](#chapter-17-object-oriented-programming-features-of-rust)
   - [Inheritance as a Type System and as Code Sharing](#inheritance-as-a-type-system-and-as-code-sharing)
-- [Using Trait Objects that Allow for Values of Different Types.](#using-trait-objects-that-allow-for-values-of-different-types)
+  - [Using Trait Objects that Allow for Values of Different Types.](#using-trait-objects-that-allow-for-values-of-different-types)
   - [Trait Objects Perform Dynamic Dispatch](#trait-objects-perform-dynamic-dispatch)
   - [Object Safety is Required for Trait Objects](#object-safety-is-required-for-trait-objects)
   - [Implementing an Object-Oriented Design Pattern](#implementing-an-object-oriented-design-pattern)
@@ -96,7 +96,7 @@ The notes that follow were created whenever I encountered a fact/concept that wa
   - [Creating References in Patterns with ref and ref mut](#creating-references-in-patterns-with-ref-and-ref-mut)
   - [Extra Conditionals in Match Guards](#extra-conditionals-in-match-guards)
   - [@ Bindings](#-bindings)
-  - [Match Ergonomics:](#match-ergonomics)
+  - [Match Ergonomics](#match-ergonomics)
 - [Chapter 19 (Advanced Features)](#chapter-19-advanced-features)
   - [Unsafe Rust](#unsafe-rust)
   - [Advanced Lifetimes](#advanced-lifetimes)
@@ -118,8 +118,14 @@ The notes that follow were created whenever I encountered a fact/concept that wa
   - [Clone and Copy for Duplicating Values](#clone-and-copy-for-duplicating-values)
   - [Hash for Mapping a Value to a Value of Fixed Size](#hash-for-mapping-a-value-to-a-value-of-fixed-size)
   - [`Default` for Default Values](#default-for-default-values)
-  - [New Version Appendix D - Useful Development Tools](#new-version-appendix-d---useful-development-tools)
-  - [Appendix D Macros](#appendix-d-macros)
+- [New Version Appendix D - Useful Development Tools](#new-version-appendix-d---useful-development-tools)
+  - [Automatic Formatting with `rustfmt`](#automatic-formatting-with-rustfmt)
+  - [Fix Your Code with `rustfix`](#fix-your-code-with-rustfix)
+  - [More Lints with Clippy](#more-lints-with-clippy)
+- [Appendix D Macros](#appendix-d-macros)
+  - [The 4 types of Macros in Rust](#the-4-types-of-macros-in-rust)
+  - [Declarative Macros with `macro_rules!`](#declarative-macros-with-macro_rules)
+  - [Pattern within the match arm](#pattern-within-the-match-arm)
   - [Procedural Code for Generating Code from Attributes](#procedural-code-for-generating-code-from-attributes)
   - [Writing a Custom `derive` macro](#writing-a-custom-derive-macro)
   - [Attribute-like Macros](#attribute-like-macros)
@@ -365,7 +371,7 @@ fn dangle() -> &String {
 - You may have 1 mutable reference _or_ any number of immutable references.
 - Referecnes must always be valid.
 
-### String Slice
+### String Slice (&str)
 - A reference to part of a String
 - Anotated as `&str`
 - Does not have ownership. Because a String slice is an immutable borrow, we cannot have a mutable borrow to the String it points to while it is in scope. 
@@ -512,6 +518,8 @@ It's not possible to call the default implementation from an overriding implemen
 ***Challenge*** Figure out how you would implmement something congruent to an override that calls 'super' in an OOP language.
 
 Answer: Probably instead of trying to use the default implementation in your type-specific trait implementation, you should create a conditional implementation that implements the trait for types that implement another trait, or implements the trait for types that enclose types that implement another trait. Then you are essentially composing the behavior from the bounded trait in your implementation of the new Trait. 
+
+
 
 ### Trait Bounds
 These are the same:
@@ -909,7 +917,7 @@ The responsibilities that remain in the main function after this process should 
 - Calling a run function in lib.rs
 - Handling the error if run returns an error
 
-### Idiomatic Rust
+### Writing Idiomatic Rust
 
 This chapter does a great job of illustrating the thought process of an idiomatic Rust programmer. Several times in a row it details the code smell and the incremental steps for improvement. The process of recognizing these smells, then making small improvement creates a chain of simple changes that greatly improves the maintainability and readibility of the program.
 
@@ -2090,7 +2098,7 @@ See `chapter_15/src/mutable_list.rs` for an example of using a `Rc<RefCell<T>>` 
 
 -> This is accomplished in `chapter_15/src/alternate_mutable_list.rs`.
 
-### Reference Cylces Can Leak Memory
+### Reference Cycles Can Leak Memory
 
 If we had a Cons list or similar recursive data structure that allowed for mutating the "next" pointer, we could easily create a directed acyclic graph with a reference cycle:
 
@@ -2133,7 +2141,7 @@ Assuming we don't call any recursive function that loops through the `List`s inf
 
 In the end each of the two `Rc<List>` had 1 reference stored on the stack, and one reference stored on the heap (by the other `Rc<List>`. Since both references stored on the stack have been cleared, both `Rc<List>`s are unreachable but have not been deallocated.
 
-### Preventing Reference Cycles: Turning an Rc<T> into a Weak<T> 
+### Preventing Reference Cycles: Turning an `Rc<T>` into a `Weak<T>` 
 
 We have seen that we can create a new reference to a `Rc<T>` by calling `Rc::clone`, which will increase the `strong_count` of the `Rc<T>` instance. The `Rc<T>` instance will only be cleaned up when its `strong_count` reaches zero.
 
@@ -2558,7 +2566,9 @@ impl Summary for Foo {}
 
 You can also override default implementations by redefining them for your type.
 
-If you wanted to match the pattern of calling `super` then performing some other work in your override function, you could use a conditional implementation where you impl the trait for types that implement some other trait. That way you could call methods from that other trait in your override method
+If you wanted to match the pattern of calling `super` then performing some other work in your override function, you could use a [_conditional implmentation_](#conditional-implmentations) where you impl the trait for types that implement some other trait. That way you could call methods from that other trait in your override method.
+
+Note that in this pattern the set of all types that implement your a given trait would be analogous to a _class_, and a _superclass_ would be analogous to the set of all traits that satisfy the trait bound for your new trait implementation. 
 
 2. The other reason to use inheritance is to allow a child type to be used in the same places as the parent type. We usually say that code that can work with data of multiple types is _polymorphic_. Rust uses generics to abstract over different possible types and trait bounds to impose constraints on what those types must provide. This is referred to as _bounded parametric polymorphism_.
 
@@ -2567,7 +2577,7 @@ Rust uses _trait objects_ instead of inheritance to avoid two common inheritance
 1. Sharing too much code.
 2. Only being able to inherit from one parent. (a type enclosed in a trait object could implement the trait the trait object uses, but also implement any other number of traits)
 
-## Using Trait Objects that Allow for Values of Different Types.
+### Using Trait Objects that Allow for Values of Different Types.
 
 In Chapter 8 we defined an enum `SpreadsheetCell` to hold *integer*, *float* and *text* variants in the same `Vec`. We did not know which enum variants would be in which cells in the `Vec` at compile time, but because knew we had a fixed set of `SpreadSheetCell` types, we were able to use an `enum` to get the code to compile.
 
@@ -2623,7 +2633,7 @@ Here, `String` does not implement the _trait objects_'s trait.
 
 ### Trait Objects Perform Dynamic Dispatch
 
-_static dispatch_: when the compiler knows at comiple time what code you are calling.
+_static dispatch_: when the compiler knows at compile time what code you are calling.
 _dynamic dispatch_: when the compiler can't tell at compile time which method you're calling. The compiled code will determine what method to call at runtime.
 
 While _trait objects_ allow us some flexibibility over using generics, there is a runtime cost. The running program must spend time finding the right method to call based on the type of the value enclosed in the _trait object_.
@@ -3426,7 +3436,7 @@ match msg {
     User { id } if (3..=7).contains(&id) => println!("Found an id in range: {}", id),
 ```
 
-### Match Ergonomics:
+### Match Ergonomics
 
 A new RFC made things a lot cleaner. Matching on a reference used to require explicit destructuring using `&` and `*`:
 
@@ -5429,9 +5439,9 @@ The `Default` trait allows you to create a default value for a type. Deriving `D
 
 `Default` is required when you call `unwrap_or_default` on `Option<T>`, which returns the result of `Default::default` for the type `T` when the `Option<T>` is `None`.
 
-### New Version Appendix D - Useful Development Tools
+## New Version Appendix D - Useful Development Tools
 
-#### Automatic Formatting with `rustfmt`
+### Automatic Formatting with `rustfmt`
 
 `rustfmt`, which can be run with either `cargo fmt`, `cargo-fmt`, or `rustfmt` if you provide file paths, formats code for style.
 
@@ -5445,19 +5455,19 @@ Answer: In `settings.json`:
     },
 ```
 
-#### Fix Your Code with `rustfix`
+### Fix Your Code with `rustfix`
 
 We can run `rustfix` by calling `cargo fix`, which will fix certain compiler warnings.
 
-#### More Lints with Clippy
+### More Lints with Clippy
 
 `clippy` provides more lints to catch common mistakes. 
 
-**Challenge**: Consider running clippy either before commit, push, or merge. 
+**hallenge**: Consider running clippy either before commit, push, or merge. 
 
-### Appendix D Macros
+## Appendix D Macros
 
-#### The 4 types of Macros in Rust
+### The 4 types of Macros in Rust
 
 **Macros** are loosely defined as Rust code that writes other Rust code. There are 4 types of macros in rust, one is _declarative_, and is defined using `macro_rules!`, and the remaining three are _procedural_: 
 
@@ -5469,13 +5479,13 @@ Macros don't need to have a finite list of paramters, and are expanded at the be
 
 Macros also must be defined before their usage.
 
-#### Declarative Macros with `macro_rules!`
+### Declarative Macros with `macro_rules!`
 
 During compilation, `macro_rules!` macros take a piece of source code, match it against a set of patterns, and then replace it with a new piece of source code based on which pattern it matched.
 
-##### An example: `vec!`
+#### An example: `vec!`
 
-We can use `vec!` to create a vector of arbitrary lenght or type, which wouldn't work with a function because we couldn't give it a type before compilation. 
+We can use `vec!` to create a vector of arbitrary length or type, which wouldn't work with a function because we couldn't give it a type before compilation. 
 
 ```
 #[macro_export]
@@ -5496,7 +5506,7 @@ macro_rules! vec {
 
 Notice that the macro definition resembles a `match` expression with the `<pattern> => <expression>` syntax.
 
-##### Macro Pattern Syntax
+#### Macro Pattern Syntax
 
 The syntax for matching patterns in macros differs from that of regular `match` expressions since we are matching Rust code instead of values. The full documentation of macro pattern syntax can be found in the [reference](https://doc.rust-lang.org/reference/macros-by-example.html).
 
@@ -5514,7 +5524,7 @@ Finally the `*` specifies that the pattern matches zero or more of whatever prec
 
 When taken together `( $( $x:expr),* )` simply means we will match any code that is a comma separated block of expressions of any length, and repeately bind those expressions to the variable `$x` for use in the match arm.
 
-#### Pattern within the match arm
+### Pattern within the match arm
 
 ```
     ( $( $x:expr ),* ) => {

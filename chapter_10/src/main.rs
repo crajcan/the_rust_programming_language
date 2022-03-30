@@ -98,6 +98,12 @@ impl<T: Display> Bark for Container<T> {
     }
 }
 
+impl<T: Display> Bark for T {
+    fn bark(&self) {
+        println!("bark: {}", self);
+    }
+}
+
 fn use_bark() {
     let int_container = Container { value: 42 };
     let string_container = Container {
