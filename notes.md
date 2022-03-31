@@ -189,13 +189,13 @@ Integers can be written with a type suffix instead of a type annotation:
 
 Integer literals can be defined in several bases:
 
-|Base           |Example    |
-|---------------|-----------|
-|Decimal        |98_222     |
-|Hex            |0xff       |
-|Octal          |0o77       |
-|Binary         |0b1111_0000|
-|Bytes(u8 only) |b'A'       |
+| Base           | Example     |
+| -------------- | ----------- |
+| Decimal        | 98_222      |
+| Hex            | 0xff        |
+| Octal          | 0o77        |
+| Binary         | 0b1111_0000 |
+| Bytes(u8 only) | b'A'        |
 
 Using pattern matching to destructure tuples:
 
@@ -231,14 +231,17 @@ println!("first val: {}", a[0]);
 - for each _value_ in rust, there is one _variable_ that is its _owner_.
 - When the _owner_ goes out of scope, the _value_ is dropped.
 
-A string literal hardcoded into the program, immutable:
+We can define an immutable string literal hardcoded into the program binary:
 
 ```
 let s = "hello";
 ```
 
+However, the compiler will instantiate `s` as a `&str` since a string literal cannot be held on the stack. String literals cannot be held on the stack because valid values of the type can be created dynamically, and may have an arbitrary size. In this case, we would know the size, but the compiler cannot make exceptions for only some values of the type.
+
 ### String
-- growable and heap allocated. The location, length, and capacity are stored on the stack.
+- growable and heap allocated.
+- The location, length, and capacity are stored on the stack.
 
 Create from a string literal:
 
@@ -246,7 +249,7 @@ Create from a string literal:
 let s = String::from("hello");
 ```
 
-`drop` is called when s goes out of scope. `drop` is the function where the implmentor of `String` can put the code to return the memory to the operating system. 
+`drop` is called when s goes out of scope. `drop` is the function where the implementor of `String` can put the code to return the memory to the operating system. 
 
 ```
 let x = 5;
@@ -255,15 +258,20 @@ let y = x;
 for values held on the stack, the second variable gets a copy of the value
 
 #### Move
+
 ```
 let x = String::from("hello");
 let y = x;
 ```    
 When we assign y to x, the String data from the stack (location, length, capacity) are copied for y, but the head data (the actual string) remains the same and is not copied. This is a 'moved' value. When the data is moved into y, x is considered invalid, and doesn't need to be freed.
 
-For heap allocated data, Rust will always make a move like this instead of a deep copy. To make a deep copy, you have to explicitly call "clone".
+For heap allocated data, Rust will always make a move like this instead of a deep copy. To make a deep copy, you have to explicitly call `clone`.
 
-For stack types (like integers) we can implment copy, to avoid moves. This will only work if drop has not been implemented for the type or any of it's components. why?
+For stack types (like integers) that have a size known at compile time, we can implement `Copy`, to avoid moves. This will only work if `Drop` has not been implemented for the type or any of its components.
+
+**Question**: Why can we only implement `Copy` for a type that does not implement `Drop`?
+
+**Answer**: Because if a type implements `Drop`, that implies that type is managing resources besides its own stack-allocated data, and those resources cannot be copied.
 
 #### Copy types
 
@@ -349,7 +357,7 @@ A _data race_ occurs when:
 
 Similarily, when you have a mutable reference, you cannot have any immutable references.
 
-#### Danginling references
+#### Dangling References
 
 Rust won't let you have a reference to something that has been freed (dropped)
 
@@ -360,11 +368,11 @@ fn dangle() -> &String {
     &s
 }
 ```
-This won't compile because `s` has gone out of scope
+This won't compile because `s` has gone out of scope when `dangle()` returns
 
 Instead, just return the value;
 ```
-fn dangle() -> &String {
+fn dangle() -> String {
     let s = String::From("hello");
 
     s
@@ -374,12 +382,12 @@ fn dangle() -> &String {
 #### Recap of Reference Rules:
 
 - You may have 1 mutable reference _or_ any number of immutable references.
-- Referecnes must always be valid.
+- References must always be valid (Your code won't compile if you try to access a value after it has been dropped).
 
 ### String Slice (&str)
 - A reference to part of a String
-- Anotated as `&str`
-- Does not have ownership. Because a String slice is an immutable borrow, we cannot have a mutable borrow to the String it points to while it is in scope. 
+- Annotated as `&str`
+- Does not have ownership. Because a `&str` is an immutable borrow, we cannot have a mutable borrow to the String it points to while it is in scope. 
 
 ```
 let s = String::from("hello world");
@@ -387,11 +395,12 @@ let s = String::from("hello world");
 let hello = &s[..5];
 let world = &s[6..];
 ```
-`hello` and `world` are stored on the stack as a ptr into the middle of the String `s` on the heap and a length value that stores the length of the slice.
+<p align="center">`hello` and `world` are stored on the stack as a ptr into the middle of the String `s` on the heap and a length value that stores the length of the slice.</p>
 
-- String literals also ahve the type &str, because they are slices that point into the binary. 
+- String literals also have the type &str, because they are slices that point into the binary. 
 - We prefer to define parameters as `first_word(s: &str)` instead of `first_word(s: &String)` because it allows us to use the same function on String and &str values.
 
+```
 fn main() {
     let my_string = String::from("hello world");
     let my_string_literal = "hello world"; 
@@ -405,8 +414,9 @@ fn main() {
     //works on a string literal directly
     let word = first_word(my_string_literal);
 }
+```
 
-- In the eyes of the compiler, both a `String Slice` and an borrowed `String` are `&str`
+- In the eyes of the compiler, both a "String Slice" (`&s[]`) and a borrowed "String" `&String` are `&str`
 
 ## Chapter 5
 
