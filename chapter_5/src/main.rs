@@ -1,6 +1,6 @@
 struct Rectangle {
     width: u32,
-    height: u32
+    height: u32,
 }
 
 impl Rectangle {
@@ -14,12 +14,12 @@ impl Rectangle {
 }
 
 fn main() {
-    let mut rect1 = Rectangle { width: 30, height: 50 };
+    let mut rect1 = Rectangle {
+        width: 30,
+        height: 50,
+    };
 
-    println!(
-        "The area of the rectangle is {}",
-        rect1.area()
-    );
+    println!("The area of the rectangle is {}", rect1.area());
 
     println!("the width of the rectangle is: {}", rect1.width);
 
@@ -37,4 +37,10 @@ fn main() {
     // println!("the reference rectangle width is: {}", ref_to_rect1.width);
 
     println!("the new width of the rectangle is: {}", rect1.width);
+
+    let second_ref_to_rect1 = &rect1;
+    println!(
+        "the second reference rectangle width is: {}",
+        second_ref_to_rect1.width
+    );
 }

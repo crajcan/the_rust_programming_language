@@ -149,14 +149,14 @@ The `::` indicates this is an 'assocatiated method', implemented on a type, not 
 
 We can import a module, and then call an associated method from that module:
 
-```
+```rust
 use std::io; 
 io::stdin()
 ```
 
 Or we can chain together module names to call a nested method directly without an import:
 
-```
+```rust
 std::io::stdin()
 ```
 
@@ -166,7 +166,7 @@ std::io::stdin()
 
 The `&` just indicates that the argument is a reference. Just like variables, references are immutable by default. Thus the need for the `&mut`. 
 
-```
+```rust
 .expect("Failed to read line");
 ```
 
@@ -182,7 +182,7 @@ The `&` just indicates that the argument is a reference. Just like variables, re
 
 Integers can be written with a type suffix instead of a type annotation:
 
-```
+```rust
 21u8
 4123i32
 ```
@@ -199,14 +199,14 @@ Integer literals can be defined in several bases:
 
 Using pattern matching to destructure tuples:
 
-```
+```rust
 let tup = (500, 6.4, 1);
 let (x,y,z) = tup;
 ```
 
 Indexing into a tuple:
 
-```
+```rust
 let five_hundred = tup.0
 ```
 
@@ -216,13 +216,13 @@ let five_hundred = tup.0
 - allocated on the stack by default
 - Trying to access an index out of bounds results in a panic
 
-```
+```rust
 let a = [1,2,3,4,5];
 ```
 
 indexing into an array:
 
-```
+```rust
 println!("first val: {}", a[0]);
 ```
 
@@ -233,7 +233,7 @@ println!("first val: {}", a[0]);
 
 We can define an immutable string literal hardcoded into the program binary:
 
-```
+```rust
 let s = "hello";
 ```
 
@@ -245,13 +245,13 @@ However, the compiler will instantiate `s` as a `&str` since a string literal ca
 
 Create from a string literal:
 
-```
+```rust
 let s = String::from("hello");
 ```
 
 `drop` is called when s goes out of scope. `drop` is the function where the implementor of `String` can put the code to return the memory to the operating system. 
 
-```
+```rust
 let x = 5;
 let y = x;
 ```    
@@ -259,7 +259,7 @@ for values held on the stack, the second variable gets a copy of the value
 
 #### Move
 
-```
+```rust
 let x = String::from("hello");
 let y = x;
 ```    
@@ -284,7 +284,7 @@ For stack types (like integers) that have a size known at compile time, we can i
 #### Ownership with functions
 passing a variable to a function will copy or move just as assigning to a new variable does.
 
-```
+```rust
 let s1 = String::from("hello");
 takes_ownership(s1);
 ```
@@ -293,7 +293,7 @@ Here, s1 is moved into takes ownership, and cannot be used again.
 #### Borrowing & References
 We can pass a _reference_ so that we can avoid the _move_ while still letting the called function _borrow_ the data it needs.
 
-```
+```rust
 let s1 = String::from("hello");
 let len = calculate_length(&s1);
 println!("The length of '{}' is {}.", s1, len);
@@ -315,7 +315,7 @@ Since `s1` was already a string, technically, `s` points to `s1`, which in turn 
 
 #### Mutable References
 
-```
+```rust
 fn main() {
     let mut s = String::from("hello");
     
@@ -331,19 +331,19 @@ To allow a called function to modify borrowed data, we have to do three things.
 
 1. Tell the compliler that the data we are allocating is going to be mutable with a type annotation.
 
-```
+```rust
 let mut s = String::from("hello");
 ```
 
 2. Denote that the function parameter on the called function is a mutable reference. 
 
-```
+```rust
 fn change(some_string: &mut String) {
 ```
 
 3. Create a mutable reference to the data to pass as an argument to the called function.
 
-```
+```rust
 change(&mut s);
 ```
 
@@ -361,7 +361,7 @@ Similarily, when you have a mutable reference, you cannot have any immutable ref
 
 Rust won't let you have a reference to something that has been freed (dropped)
 
-```
+```rust
 fn dangle() -> &String {
     let s = String::From("hello");
 
@@ -371,7 +371,7 @@ fn dangle() -> &String {
 This won't compile because `s` has gone out of scope when `dangle()` returns
 
 Instead, just return the value;
-```
+```rust
 fn dangle() -> String {
     let s = String::From("hello");
 
@@ -389,7 +389,7 @@ fn dangle() -> String {
 - Annotated as `&str`
 - Does not have ownership. Because a `&str` is an immutable borrow, we cannot have a mutable borrow to the String it points to while it is in scope. 
 
-```
+```rust
 let s = String::from("hello world");
 
 let hello = &s[..5];
@@ -400,7 +400,7 @@ let world = &s[6..];
 - String literals also have the type &str, because they are slices that point into the binary. 
 - We prefer to define parameters as `first_word(s: &str)` instead of `first_word(s: &String)` because it allows us to use the same function on String and &str values.
 
-```
+```rust
 fn main() {
     let my_string = String::from("hello world");
     let my_string_literal = "hello world"; 
@@ -424,8 +424,9 @@ fn main() {
 
 In order for a struct to store a reference type, such as `&str` (the string slice type), we must use a lifetime specifier to ensure that the data referenced by a struct is valid for as long as the struct is. Without lifetime specifiers, structs can only store owned types like `String`.
 
-methods: on an instance of a struct.
-"assocatiated functions": on a struct (type), similar to "class methods" or "static methods".
+_methods_: on an instance of a struct.
+
+_assocatiated functions_: on a struct (type), similar to "class methods" or "static methods".
 
 #### Printing Structs
 
@@ -435,15 +436,15 @@ We cannot use `{}` without manually implmenting the Disply trait for a given str
 
 #### Automatic Referencing and Dereferencing
 
-When calling methods, Rust can automatically dereference a pointer create a reference from a piece of data to match the signature of the method you are trying to call.
+When calling **methods**, Rust can automatically create a reference from a piece of data to match the signature of the method you are trying to call.
 
 For instance if you try to call `p1.distance(&p2)`, and the signtature of `distance` is `distance(&self, p2: &Point)`, the complier will behind the scenes create a reference out of p1 so that you can call `#distance` without explicitly creating the ptr yourself:
 
-```
+```rust
 p1.distance(&p2) --> (&p1).distance(&p2)
 ```
 
-In addition to adding a `&` to automatically create a reference, rust can automatically create a mutable reference by adding `&mut` if the given method signature calls for it (`foo(&mut self)`)
+In addition to adding a `&` to automatically create a reference, rust can automatically create a mutable reference by adding `&mut` if the given method signature calls for it (`foo(&mut self)`), and the owned value you are calling the method on is mutable.
 
 Conversely, when you provide a pointer to an instance and try to call a method on the instance, Rust can automatically dereference a ptr by adding a `*` behind the scenes.
 
