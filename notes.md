@@ -467,9 +467,9 @@ Write a method that takes in a mutable reference, then based on a match statemen
 
 #### match vs ?
 
-Difference between using match to handle Result type and using `?` operator to handle result type:
+Difference between using match to handle `Result` type and using `?` operator to handle result type:
 
-When you use `?` the `from` function from the `From` trait is used to convert the error to the type specified in the function signature.
+When you use `?` the `from` function from the `From` trait is used to convert the error you are returning to the return type specified in the function signature.
 
 `unwrap` and `expect` are signs that your program can be more robust (handle failure instead of panicking)
 
@@ -493,7 +493,6 @@ enum Result<T, E> {
     Err(E),
 }
 ```
-****
 Notice that T and E are unbounded.
 
 ## Chapter 10 (Generics, Traits, and Lifetimes)
