@@ -189,14 +189,13 @@ Integers can be written with a type suffix instead of a type annotation:
 
 Integer literals can be defined in several bases:
 
-```
-Base           Example
-Decimal        98_222
-Hex            0xff
-Octal          0o77
-Binary         0b1111_0000
-Bytes(u8 only) b'A'
-```
+|Base           |Example    |
+|---------------|-----------|
+|Decimal        |98_222     |
+|Hex            |0xff       |
+|Octal          |0o77       |
+|Binary         |0b1111_0000|
+|Bytes(u8 only) |b'A'       |
 
 Using pattern matching to destructure tuples:
 
