@@ -28,7 +28,6 @@ The notes that follow were created whenever I encountered a fact/concept that wa
   - [Performance](#performance)
   - [Orphan rule](#orphan-rule)
   - [Default implmentations](#default-implmentations)
-  - [Trait Bounds](#trait-bounds)
   - [Conditional Implmentations](#conditional-implmentations)
   - [Lifetimes](#lifetimes)
   - [Lifetime Annotations in Struct Definitions](#lifetime-annotations-in-struct-definitions)
@@ -532,22 +531,21 @@ It's not possible to call the default implementation from an overriding implemen
 
 ***Challenge*** Figure out how you would implmement something congruent to an override that calls 'super' in an OOP language.
 
-Answer: Probably instead of trying to use the default implementation in your type-specific trait implementation, you should create a conditional implementation that implements the trait for types that implement another trait, or implements the trait for types that enclose types that implement another trait. Then you are essentially composing the behavior from the bounded trait in your implementation of the new Trait. 
+If you wanted to match the pattern of calling `super` then performing some other work in your override function, you could use a [_conditional implmentation_](#conditional-implmentations) where you impl the trait for types that implement some other trait. That way you could call methods from that other trait in your override method.
 
+Note that in this pattern the set of all types that implement your a given trait would be analogous to a _class_, and a _superclass_ would be analogous to the set of all traits that satisfy the trait bound for your new trait implementation. 
 
+#### Three Ways of Specifying Trait Bounds in Function Definitions
 
-### Trait Bounds
-These are the same:
-
-```
+```rust 
 pub fn notify<T: Summary>(item: T)
 ```
 
-```
+```rust
 pub fn notify(item: impl Summary)
 ```
 
-```
+```rust 
 pub fn notify<T>(item: T)
 where
     T: Summary
@@ -559,11 +557,11 @@ When implementing a function with a generic parameter you will often get a compi
 
 _From Stack Overflow https://stackoverflow.com/questions/31012923/what-is-the-difference-between-copy-and-clone_
 
-```
 Clone is designed for arbitrary duplications: a Clone implementation for a type T can do arbitrarily complicated operations required to create a new T. It is a normal trait (other than being in the prelude), and so requires being used like a normal trait, with method calls, etc.
 
 The Copy trait represents values that can be safely duplicated via memcpy: things like reassignments and passing an argument by-value to a function are always memcpys, and so for Copy types, the compiler understands that it doesn't need to consider those a move.
 
+```rust
 // u8 implements Copy
 let x: u8 = 123;
 let y = x;
@@ -576,10 +574,12 @@ let w = v.clone();
 //let w = v // This would *move* the value, rendering v unusable.
 ```
 
+Also see [move](#move) from Chapter 4 to learn more about `Copy` and `Clone`, notably that `Copy` is only for types who's values can be stored on the stack, and do not implement `Drop`.
+
 ### Conditional Implmentations
 Implement a method for a type only when the enclosed generic type satisfies some trait bound:
 
-```
+```rust
 impl<T: Display + PartialOrd> Pair<T> {
     fn cmp_display(&self) {
         if self.x >= self.y {
@@ -596,7 +596,7 @@ impl<T: Display + PartialOrd> Pair<T> {
 
 Conditionally implement a trait for any type that implements some other trait
 
-```
+```rust
 impl<T:Display> ToString for T {
 }
 ```
@@ -606,7 +606,7 @@ We would read this as, "Implement the ToString trait for any type that implement
 
 Conditionally implement a trait for a generic type whenever the generic type's enclosed type implements some trait:
 
-```
+```rust
 impl<T: Display> Bark for Container<T>
 ```
 
@@ -620,7 +620,7 @@ We annotate the lifetime relationships between references using `generic lifetim
 #### Dangling references
 *A piece of data must have a longer lifetime than any reference to it*
 
-```
+```rust
     let y;
     {
         let x = 5;
@@ -631,7 +631,7 @@ We annotate the lifetime relationships between references using `generic lifetim
 
 This won't compile because x is dropped when the inner scope is over. The borrow checker knows x has a shorter lifetime than y (y the reference outlives x the value), so it throws an error.
 
-```
+```rust
 {
     let x = 5;
 
@@ -645,7 +645,7 @@ Here x has a longer lifetime than y (y the reference does not outlive x the valu
 
 #### Generic Lifetimes in Functions
 
-```
+```rust
 fn longest(x: &str, y: &str) -> &str {
     if x.len() > y.len() {
         x
@@ -681,7 +681,7 @@ Here, the lifetime `'a` can be anything, as long as x, y, and the return value a
 
 Specifically, we are guaranteeing that the reference that gets returned will live at least as long as the value referred to by x, _and_ at least as long as the value referred to by y, since the return value could reference either.
 
-```
+```rust
 fn main() {
     let string1 = String::from("abcd");
     let result;
@@ -695,18 +695,17 @@ fn main() {
 }
 ```
 
-In the above example, this code will not compile. The signature of #longest guarantees that
-none none of the 3 references can be used after any of the others have gone out of scope. We have tied them together.
+In the above example, this code will not compile. The signature of `#longest` guarantees that none of the 3 references can be used after any of the others have gone out of scope. We have tied them together.
 
-More specifically, we have specified that `result` will live at least as long as the shorter of `string1` and `string2`. It does not guarantee that it will live any longer than that. So the return value `result` is only valid in scopes where both string1 and string2 are valid. Since `result` is used after `string2` is out of scope, the borrow checker cannot validate the borrow of string2.
+More specifically, we have specified that `result` will live at least as long as the shorter of `string1` and `string2`. It does not guarantee that it will live any longer than that. So the return value `result` is only valid in scopes where both `string1` and `string2` are valid. Since `result` is used after `string2` is out of scope, the borrow checker cannot validate the borrow of `string2`.
 
 ### Lifetime Annotations in Struct Definitions
 
-when a struct holds a reference, its definition needs a lifetime annotation. This guarantees the reference in the struct will live at least as long as the struct.
+When a struct holds a reference, its definition needs a lifetime annotation. This guarantees the reference in the struct will live at least as long as the struct.
 
 ***Challenge*** Create an example where a struct outlives a reference that is enclosed, and thus fails to compile.
 
-Answer: This is done in #use_structs_containing_refereces in `chapter_10/src/main.rs`
+**Answer**: This is done in `#use_structs_containing_references` in `chapter_10/src/main.rs`
 
 ### Lifetime Elision
 
@@ -723,22 +722,36 @@ Lifetimes on return values
 These three rules are applied to assign lifetimes to references. If the three rules are applied and the compiler still can't determine a lifetime, you must do so manually with annotations. If it can determine all the lifetimes, then they are _elided_
 
 1. Each parameter that is a reference gets it's own lifetime.
-
-```
-fn foo<'a, 'b>(x: &'a i32, y: &'b i32);
-```
-
+    ```rust 
+    fn foo<'a, 'b>(x: &'a i32, y: &'b i32);
+    ```
 2. If there is exactly one input lifetime parameter, that lifetime is assigned to all output parameters.
-   
-```
-fn foo<'a>(x: &'a i32) -> &'a i32
-```
-
-This one is necessary because we can't return a reference to something that we created in the method, that would be a dangling reference. So we need to reference something that was passed in. In that case the returned reference has to live at least as long as the one passed in reference.
+    ```
+    fn foo<'a>(x: &'a i32) -> &'a i32
+    ```
+    This one is necessary because we can't return a reference to something that we created in the method, that would be a dangling reference. So we need to reference something that was passed in. In that case the returned reference has to live at least as long as the one passed in reference.
 
 3. When there are multiple input lifetime parameters, but one of them is `&self` or `&mut self`, the lifetime of `self` is assigned to all output lifetime paramters. 
 
-This one makes sense intuitively. Why would you want to use a reference returned by a method after the instance has gone out of scope?
+    This one makes sense intuitively. Why would you want to use a reference returned by a method after the instance has gone out of scope?
+
+
+Note that even when it is obvious what input a return value is referencing, the compiler still cannot infer the lifetime of the return value and needs generic lifetime paramters:
+
+```rust
+fn function_with_obvious_reference_origin(a: &str, b: &str) -> &str {
+    println!("a: {}", a);
+    println!("b: {}", b);
+
+    a 
+}
+```
+
+The compiler will suggest we add lifetime parameters:
+
+```rust
+fn function_with_obvious_reference_origin<'a>(a: &'a str, b: &'a str) -> &'a str {
+```
 
 #### Lifetime Annotations in Method Definitions
 
@@ -752,15 +765,43 @@ Means the reference is valid for the entire lifetime of the program.
 
 All string literals have the static lifetime:
 
-```
+```rust
 let s: &'static str = "I have a static lifetime.";
 ```
 
 Error messages that suggest using the static lifetime often result from attempting to create a dangling reference or from a mismatch of the available lifetimes.
 
+When we create a dangling pointer:
+
+```rust
+fn dangling_pointer() -> &str {
+    let s = String::from("hello");
+
+    &s
+}
+```
+
+We'll get the suggestion:
+
+```rust
+help: consider using the `'static` lifetime
+    |
+191 | fn dangling_pointer() -> &'static str {
+```
+
+but it still will not compile if we give the return value the `'static` lifetime:
+
+```rust
+error[E0515]: cannot return reference to local variable `s`
+   --> src/main.rs:194:5
+    |
+194 |     &s
+    |     ^^ returns a reference to data owned by the current function
+```
+
 ### Syntax for Generic type parameters, Trait Bounds and Lifetimes all together
 
-```
+```rust
 fn longest_with_an_announcement<'a, T>(x: &'a str, y: &'a str, ann: T) -> &'a str
     where T: Display
 {
@@ -775,13 +816,13 @@ fn longest_with_an_announcement<'a, T>(x: &'a str, y: &'a str, ann: T) -> &'a st
 
 Of course, instead of the `where` clause, we could also write it as:
 
-```
+```rust
 fn longest_with_an_announcement<'a>(x: &'a str, y: &'a str, ann: impl Display) -> &'a str
 ```
 
-or
+or:
 
-```
+```rust
 fn longest_with_an_announcement<'a, T: Display>(x: &'a str, y: &'a str, ann: T) -> &'a str
 ```
 

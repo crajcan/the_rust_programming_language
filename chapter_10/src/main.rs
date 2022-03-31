@@ -2,30 +2,30 @@ use std::fmt::Debug;
 
 //a generic function that cannot work without trait bounds
 
-// fn largest<T>(list: &[T]) -> T {
-//     let mut largest = list[0];
+fn largest<T: std::cmp::PartialOrd>(list: &[T]) -> &T {
+    let mut largest = &list[0];
+    //
+    for item in list.iter() {
+        if item > largest {
+            largest = item;
+        }
+    }
+    //
+    largest
+}
 
-//     for &item in list.iter() {
-//         if item > largest {
-//             largest = item;
-//         }
-//     }
+fn use_largest() {
+    let number_list = vec![34, 50, 25, 100, 65];
 
-//     largest
-// }
+    let result = largest(&number_list);
+    println!("The largest number is {}", result);
 
-// fn use_largest() {
-//     let number_list = vec![34, 50, 25, 100, 65];
+    let char_list = vec!['y', 'm', 'a', 'q'];
 
-//     let result = largest(&number_list);
-//     println!("The largest number is {}", result);
+    let result = largest(&char_list);
 
-//     let char_list = vec!['y', 'm', 'a', 'q'];
-
-//     let result = largest(&char_list);
-
-//     println!("The largest char is {}", result);
-// }
+    println!("The largest char is {}", result);
+}
 
 /* ************************************************************************** */
 
@@ -104,6 +104,12 @@ impl<T: Display> Bark for T {
     }
 }
 
+// impl<T: Debug> Bark for T {
+//     fn bark(&self) {
+//         println!("bark: {:?}", self);
+//     }
+// }
+
 fn use_bark() {
     let int_container = Container { value: 42 };
     let string_container = Container {
@@ -181,9 +187,22 @@ fn use_structs_containing_refereces() {
     println!("{:?}", i);
 }
 
+// fn function_with_obvious_reference_origin(a: &str, b: &str) -> &str {
+//     println!("a: {}", a);
+//     println!("b: {}", b);
+
+//     a
+// }
+
+// fn dangling_pointer() -> &'static str {
+//     let s = String::from("hello");
+
+//     &s
+// }
+
 fn main() {
     //A generic function that can't work without trait bounds
-    //use_largest();
+    use_largest();
 
     //use a trait implemented for IntPoint
     let int_point = IntPoint { x: 1, y: 2 };
