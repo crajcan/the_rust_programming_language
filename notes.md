@@ -12,14 +12,15 @@ The notes that follow were created whenever I encountered a fact/concept that wa
     
 ## Table of Contents<!-- omit in toc -->
 - [Chapter 1](#chapter-1)
-- [Chapter 2](#chapter-2)
-- [Chapter 3](#chapter-3)
+- [Chapter 2 (Guessing Game)](#chapter-2-guessing-game)
+- [Chapter 3 (Core Concepts)](#chapter-3-core-concepts)
   - [Arrays](#arrays)
-- [Chapter 4](#chapter-4)
+- [Chapter 4 (Understanding Ownership)](#chapter-4-understanding-ownership)
   - [String](#string)
   - [String Slice (&str)](#string-slice-str)
-- [Chapter 5](#chapter-5)
-  - [Structs](#structs)
+- [Chapter 5 (Structs)](#chapter-5-structs)
+  - [Printing Structs](#printing-structs)
+  - [Automatic Referencing and Dereferencing](#automatic-referencing-and-dereferencing)
 - [Chapter 6 (Enums and Pattern Matching)](#chapter-6-enums-and-pattern-matching)
 - [Chapter 7 (Module stuff I mostly knew)](#chapter-7-module-stuff-i-mostly-knew)
 - [Chapter 8 (Array and collection stuff I knew)](#chapter-8-array-and-collection-stuff-i-knew)
@@ -138,7 +139,7 @@ run clippy: cargo clippy --fix --allow-staged || --allow-dirty
 run rustfmt: rustfmt src/main.rs || src.lib.rs
 ```
 
-## Chapter 2
+## Chapter 2 (Guessing Game)
 
 `let mut guess = String::new();`
 
@@ -177,7 +178,7 @@ The `&` just indicates that the argument is a reference. Just like variables, re
 
 `use rand::Rng;` brings the `Rng` trait into scope, which defines random number generation methods on instances of `rand`.
 
-## Chapter 3
+## Chapter 3 (Core Concepts)
 
 Integers can be written with a type suffix instead of a type annotation:
 
@@ -225,7 +226,7 @@ indexing into an array:
 println!("first val: {}", a[0]);
 ```
 
-## Chapter 4
+## Chapter 4 (Understanding Ownership)
 
 - for each _value_ in rust, there is one _variable_ that is its _owner_.
 - When the _owner_ goes out of scope, the _value_ is dropped.
@@ -417,9 +418,7 @@ fn main() {
 
 - In the eyes of the compiler, both a "String Slice" (`&s[]`) and a borrowed "String" `&String` are `&str`
 
-## Chapter 5
-
-### Structs
+## Chapter 5 (Structs)
 
 In order for a struct to store a reference type, such as `&str` (the string slice type), we must use a lifetime specifier to ensure that the data referenced by a struct is valid for as long as the struct is. Without lifetime specifiers, structs can only store owned types like `String`.
 
@@ -427,13 +426,13 @@ _methods_: on an instance of a struct.
 
 _assocatiated functions_: on a struct (type), similar to "class methods" or "static methods".
 
-#### Printing Structs
+### Printing Structs
 
 We cannot use `{}` without manually implmenting the Disply trait for a given struct. We can use `{:?}` if we include the `#[derive(debug)]` annotation immediately above the struct definition.
 
 `#[derive(debug)]` not only gives us use of `{:?}` but also `{:#?}`, which will print the same thing but with new lines between the fields of the struct.
 
-#### Automatic Referencing and Dereferencing
+### Automatic Referencing and Dereferencing
 
 When calling **methods**, Rust can automatically create a reference from a piece of data to match the signature of the method you are trying to call.
 
